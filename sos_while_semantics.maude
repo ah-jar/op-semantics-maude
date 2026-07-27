@@ -13,7 +13,7 @@ mod SOS-WHILE-SEMANTICS is
     op <_,_> : Stat State -> Config .
     op Bottom : -> State [ctor] .
 
-    vars S S1 S1' S2 : Stat .
+    vars S S' S1 S1' S2 : Stat .
     vars M M' M'' : State .
     vars Q : Qid .
     vars E E' : Exp .
@@ -68,4 +68,11 @@ mod SOS-WHILE-SEMANTICS is
     rl [assert] :
         < assert C before S , M > =>
         < if C then S else abort , M > .
+
+    rl [or1] : 
+      < S or S' , M > => < S , M > .
+
+    rl [or2] :
+      < S or S' , M > => < S' , M > .
+
 endm

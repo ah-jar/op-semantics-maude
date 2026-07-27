@@ -116,4 +116,12 @@ mod NS-WHILE-SEMANTICS is
     < assert C before S , M > => Bottom
     if B[C] M = false .
 
+  crl [or1] : 
+    < S or S' , M > => M'
+    if < S , M > => M' .
+
+  crl [or2] :
+    < S or S' , M > => M'
+    if < S' , M > => M' .
+
 endm

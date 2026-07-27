@@ -31,6 +31,8 @@ mod NS-WHILE-PROOFS is
   op forabortns : Stat State Tree Tree State -> Tree .
   op assertttns : Stat State Tree State -> Tree .
   op assertffns : Stat State State -> Tree .
+  op or1ns : Stat State Tree State -> Tree .
+  op or2ns : Stat State Tree State -> Tree .
 
   op finalState : Tree -> State .
 
@@ -59,6 +61,8 @@ mod NS-WHILE-PROOFS is
   eq finalState(forabortns(S, M, T, T', M')) = M' .
   eq finalState(assertttns(S, M, T, M')) = M' .
   eq finalState(assertffns(S, M, M')) = M' .
+  eq finalState(or1ns(S, M, T, M')) = M' .
+  eq finalState(or2ns(S, M, T, M')) = M' .
 
   rl [assign] :
     < Q := E , M > => assns(Q := E, M, M [Q |-> A[E] M]) .
@@ -197,5 +201,20 @@ mod NS-WHILE-PROOFS is
     < assert C before S , M > =>
     assertffns(assert C before S, M, Bottom)
     if B[C] M = false .
+
+  crl [or1] : 
+    < S or S' , M > =>
+    or1ns(S or S', M, T, M')
+    if 
+      < S , M > => T 
+      /\ M' := finalState(T) .
+
+  crl [or2] : 
+    < S or S' , M > =>
+    or2ns(S or S', M, T, M')
+    if 
+      < S' , M > => T 
+      /\ M' := finalState(T) .
+
 
 endm

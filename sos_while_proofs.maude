@@ -25,6 +25,9 @@ mod SOS-WHILE-PROOFS is
   op abortsos : Stat State State -> Tree .
   op compabortsos : Stat State Tree State -> Tree .
   op assertsos : Stat State Stat State -> Tree .
+  op or1sos : Stat State Stat State -> Tree .
+  op or2sos : Stat State Stat State -> Tree .
+
 
   op finalState : Tree -> State .
   op finalStat : Tree -> Stat .
@@ -51,6 +54,9 @@ mod SOS-WHILE-PROOFS is
   eq finalStat(repeatsos(S, M, S', M')) = S' .
   eq finalStat(forsos(S, M, S', M')) = S' .
   eq finalStat(assertsos(S, M, S', M')) = S' .
+  eq finalStat(or1sos(S, M, S', M')) = S' .
+  eq finalStat(or2sos(S, M, S', M')) = S' .
+
 
   eq finalState(asssos(S, M, M')) = M' .
   eq finalState(skipsos(S, M, M')) = M' .
@@ -64,6 +70,8 @@ mod SOS-WHILE-PROOFS is
   eq finalState(abortsos(S, M, M')) = M' .
   eq finalState(compabortsos(S, M, T, M')) = M' .
   eq finalState(assertsos(S, M, S', M')) = M' .
+  eq finalState(or1sos(S, M, S', M')) = M' .
+  eq finalState(or2sos(S, M, S', M')) = M' .
 
   op isAbort : Tree -> Bool .
   eq isAbort(abortsos(S, M, M')) = true .
@@ -131,6 +139,12 @@ mod SOS-WHILE-PROOFS is
     < assert C before S , M > =>
     assertsos(assert C before S, M,
     if C then S else abort , M) .
+
+  rl [or1] : 
+    < S or S' , M > => or1sos(S or S', M, S, M) .
+
+  rl [or2] : 
+    < S or S' , M > => or2sos(S or S', M, S', M) .
 
 
   *** CIERRE TRANSITIVO

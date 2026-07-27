@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Ejecuta Maude, convierte los términos de prueba en árboles LaTeX y crea un PDF.
-Soporta WHILE extendido y soporta trazas masivas de ejecución incrementando el límite de recursión de Python.
+Ejecuta Maude vía 'search', extrae todas las ramas de ejecución no deterministas (or, par)
+o deterministas, convierte los términos de prueba en árboles LaTeX y genera un PDF multipágina.
+Soporta los modos --ns, --sos y --compare.
 """
 
 import re
@@ -12,7 +13,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-# --- ELEVAR LÍMITE DE RECURSIÓN PARA EJECUCIONES LARGAS ---
+# --- ELEVAR LÍMITE DE RECURSIÓN PARA TRAZAS LARGAS/PROFUNDAS ---
 sys.setrecursionlimit(100000)
 
 
@@ -45,6 +46,7 @@ def split_arguments(text: str) -> list[str]:
 def parse_tree(term: str, semantics: str = "ns") -> Node:
     term = re.sub(r"\s+", " ", term).strip()
 
+    # Detección de estados atascados
     match_run_stuck = re.fullmatch(r"run\(\s*\(?\s*<\s*(.*?)\s*,\s*(.*?)\s*>\s*\)?\s*\)", term)
     if match_run_stuck:
         return Node("stuck", match_run_stuck.group(1).strip(), match_run_stuck.group(2).strip(), "stuck", semantics=semantics, is_stuck=True)
@@ -56,25 +58,8 @@ def parse_tree(term: str, semantics: str = "ns") -> Node:
     constructor = match.group(1)
     args = split_arguments(match.group(2))
 
-    # --- FALLBACK PARA CASO RUN ATASCADO ---
-    if constructor == "run":
-        if len(args) == 1:
-            inner = args[0].strip()
-            if inner.startswith("(") and inner.endswith(")"):
-                inner = inner[1:-1].strip()
-            if inner.startswith("<") and inner.endswith(">"):
-                parts = inner[1:-1].split(",", 1)
-                if len(parts) == 2:
-                    return Node("stuck", parts[0].strip(), parts[1].strip(), "stuck", semantics=semantics, is_stuck=True)
-        elif len(args) == 2:
-            s_part = args[0].strip()
-            m_part = args[1].strip()
-            if s_part.startswith("<") and m_part.endswith(">"):
-                return Node("stuck", s_part[1:].strip(), m_part[:-1].strip(), "stuck", semantics=semantics, is_stuck=True)
-        raise ValueError(f"Constructor 'run' atascado no pudo ser procesado. Argumentos: {args}")
-
-    # --- CIERRE TRANSITIVO ---
-    if constructor == "seqsos" and len(args) >= 1:
+    # --- CIERRE TRANSITIVO (SOS) ---
+    if constructor == "seqsos":
         children = tuple(parse_tree(arg, "sos") for arg in args if arg != "nilSOS")
         return Node("seq", "", "", "", children, semantics="sos")
 
@@ -93,28 +78,32 @@ def parse_tree(term: str, semantics: str = "ns") -> Node:
         return Node("while-tt", args[0], args[1], args[4], (parse_tree(args[2], "ns"), parse_tree(args[3], "ns")), semantics="ns")
     if constructor == "whileffns" and len(args) == 3:
         return Node("while-ff", args[0], args[1], args[2], semantics="ns")
-    if constructor == "whileabortns" and len(args) == 4:
-        return Node("while-abort", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
     if constructor == "repeatffns" and len(args) == 5:
         return Node("repeat-ff", args[0], args[1], args[4], (parse_tree(args[2], "ns"), parse_tree(args[3], "ns")), semantics="ns")
     if constructor == "repeatttns" and len(args) == 4:
         return Node("repeat-tt", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
-    if constructor == "repeatabortns" and len(args) == 4:
-        return Node("repeat-abort", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
     if constructor == "forttns" and len(args) == 6:
         return Node("for-tt", args[0], args[1], args[5], (parse_tree(args[2], "ns"), parse_tree(args[3], "ns"), parse_tree(args[4], "ns")), semantics="ns")
     if constructor == "forffns" and len(args) == 3:
         return Node("for-ff", args[0], args[1], args[2], semantics="ns")
-    if constructor == "forabortns" and len(args) == 5:
-        return Node("for-abort", args[0], args[1], args[4], (parse_tree(args[2], "ns"), parse_tree(args[3], "ns")), semantics="ns")
     if constructor == "abortns" and len(args) == 3:
         return Node("abort", args[0], args[1], args[2], semantics="ns")
     if constructor == "compabortns" and len(args) == 4:
         return Node("comp-abort", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
+    if constructor == "whileabortns" and len(args) == 4:
+        return Node("while-abort", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
+    if constructor == "repeatabortns" and len(args) == 4:
+        return Node("repeat-abort", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
+    if constructor == "forabortns" and len(args) == 5:
+        return Node("for-abort", args[0], args[1], args[4], (parse_tree(args[2], "ns"), parse_tree(args[3], "ns")), semantics="ns")
     if constructor == "assertttns" and len(args) == 4:
         return Node("assert-tt", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
     if constructor == "assertffns" and len(args) == 3:
         return Node("assert-ff", args[0], args[1], args[2], semantics="ns")
+    if constructor == "or1ns" and len(args) == 4:
+        return Node("or1", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
+    if constructor == "or2ns" and len(args) == 4:
+        return Node("or2", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
 
     # --- REGLAS DE SEMÁNTICA DE PASO CORTO (SOS) ---
     if constructor == "asssos" and len(args) == 3:
@@ -141,6 +130,10 @@ def parse_tree(term: str, semantics: str = "ns") -> Node:
         return Node("comp-abort", args[0], args[1], args[3], (parse_tree(args[2], "sos"),), semantics="sos")
     if constructor == "assertsos" and len(args) == 4:
         return Node("assert", args[0], args[1], args[3], next_stat=args[2], semantics="sos")
+    if constructor == "or1sos" and len(args) == 4:
+        return Node("or1", args[0], args[1], args[3], next_stat=args[2], semantics="sos")
+    if constructor == "or2sos" and len(args) == 4:
+        return Node("or2", args[0], args[1], args[3], next_stat=args[2], semantics="sos")
 
     raise ValueError(f"Constructor no soportado: {constructor}/{len(args)}")
 
@@ -168,7 +161,7 @@ def statement_latex(text: str) -> str:
     for old, new in replacements:
         text = text.replace(old, new)
 
-    for word in ("skip", "abort", "if", "then", "else", "while", "do", "repeat", "until", "for", "to", "assert", "before", "true", "false"):
+    for word in ("skip", "abort", "if", "then", "else", "while", "do", "repeat", "until", "for", "to", "assert", "before", "or", "true", "false"):
         text = re.sub(rf"\b{word}\b", rf"\\mathbf{{{word}}}", text)
 
     for i, variable in enumerate(variables):
@@ -190,18 +183,11 @@ class Context:
 
     def get_sigma(self, text: str) -> str:
         clean_text = re.sub(r"\s+", " ", text.strip())
-
-        if clean_text == "stuck":
-            return r"\mathbf{stuck}"
-
-        if clean_text == "Bottom":
-            return r"\bot"
-
-        if clean_text == "empty":
-            return r"\varnothing"
+        if clean_text == "stuck": return r"\mathbf{stuck}"
+        if clean_text == "Bottom": return r"\bot"
+        if clean_text == "empty": return r"\varnothing"
 
         norm_key = re.sub(r"[\s'\(\)]+", "", clean_text)
-
         if norm_key not in self.sigma_keys:
             sig_id = len(self.sigma_keys)
             self.sigma_keys[norm_key] = sig_id
@@ -225,6 +211,7 @@ class Context:
         return statement_latex(clean_text)
 
     def format_state_value(self, text: str) -> str:
+        if text == "Bottom": return r"\bot"
         bindings = re.findall(r"'?([a-zA-Z0-9_-]+)\s*(?:\|->|:=)\s*(-?\d+)", text)
         if bindings:
             items = [rf"{identifier_latex(name)} \mapsto {value}" for name, value in bindings]
@@ -255,16 +242,14 @@ def get_transition(node: Node, ctx: Context) -> str:
 def format_axiom(node: Node, ctx: Context) -> str:
     judgement = get_transition(node, ctx)
     sem_label = "ns" if node.semantics == "ns" else "sos"
-    label = rf"\;\mathrm{{[{node.rule}_{{{sem_label}}}]}}"
-    return rf"{judgement}{label}"
+    return rf"{judgement}\;\mathrm{{[{node.rule}_{{{sem_label}}}]}}"
 
 
 def format_rule(node: Node, child_derivs: list[str], ctx: Context) -> str:
     judgement = get_transition(node, ctx)
     sem_label = "ns" if node.semantics == "ns" else "sos"
-    label = rf"\;\mathrm{{[{node.rule}_{{{sem_label}}}]}}"
     premises = r"\qquad".join(child_derivs)
-    return rf"\frac{{{premises}}}{{{judgement}}}{label}"
+    return rf"\frac{{{premises}}}{{{judgement}}}\;\mathrm{{[{node.rule}_{{{sem_label}}}]}}"
 
 
 def split_tree(node: Node, ctx: Context) -> str:
@@ -274,7 +259,6 @@ def split_tree(node: Node, ctx: Context) -> str:
         return ""
 
     child_derivs = []
-
     for child in node.children:
         if child.children:
             child_id = split_tree(child, ctx)
@@ -297,203 +281,34 @@ def split_tree(node: Node, ctx: Context) -> str:
     return my_id
 
 
-def extract_result(output: str) -> str:
-    match = re.search(r"result\s+[^:]+:\s*", output)
-    if not match:
-        raise RuntimeError("Maude no devolvió un resultado.\n\n" + output)
-    result = output[match.end():]
-    result = re.split(r"\n(?:Bye\.|Maude>)", result, maxsplit=1)[0]
-    return result.strip()
-
-
-def run_maude_command(command: str, main_file: Path) -> str:
-    maude = shutil.which("maude")
-    if not maude:
-        raise RuntimeError("No se encuentra el ejecutable 'maude' en PATH.")
-
-    process = subprocess.run(
-        [maude, "-no-banner", main_file.name],
-        input=command,
-        text=True,
-        capture_output=True,
-        cwd=main_file.parent,
-    )
-    output = process.stdout + process.stderr
-    if process.returncode != 0:
-        raise RuntimeError(output)
-    return extract_result(output)
-
-
-def get_program_term(program_file: Path) -> str:
-    program = program_file.read_text(encoding="utf-8").strip()
-    if program.endswith("."):
-        program = program[:-1].rstrip()
-    if not program.startswith("<"):
-        return f"< {program} , empty >"
-    return program
-
-
-def run_sos(program_term: str, main_file: Path) -> Node:
-    command = f"rew in SOS-WHILE-PROOFS : run({program_term}) .\nquit\n"
-    term = run_maude_command(command, main_file)
-    return parse_tree(term, semantics="sos")
-
-
-def run_ns(program_term: str, main_file: Path) -> Node:
-    command = f"rew in NS-WHILE-PROOFS : {program_term} .\nquit\n"
-    term = run_maude_command(command, main_file)
-
-    term = re.sub(r"\s+", " ", term).strip()
-    if term.startswith("(") and term.endswith(")"):
-        term = term[1:-1].strip()
-
-    match_config = re.fullmatch(r"<\s*(.*?)\s*,\s*(.*?)\s*>", term)
-    if match_config:
-        return Node("stuck", match_config.group(1).strip(), match_config.group(2).strip(), "stuck", semantics="ns", is_stuck=True)
-
-    return parse_tree(term, semantics="ns")
-
-
-def get_init_and_final_sigma_ids(tree: Node, ctx: Context) -> tuple[int | None, int | None]:
-    if tree.rule == "seq" and tree.children:
-        init_text = tree.children[0].before
-        final_text = tree.children[-1].after
-    else:
-        init_text = tree.before
-        final_text = tree.after
-
-    norm_init = re.sub(r"[\s'\(\)]+", "", re.sub(r"\s+", " ", init_text.strip()))
-    norm_final = re.sub(r"[\s'\(\)]+", "", re.sub(r"\s+", " ", final_text.strip()))
-
-    init_id = ctx.sigma_keys.get(norm_init)
-    final_id = ctx.sigma_keys.get(norm_final)
-    return init_id, final_id
-
-
 def build_semantics_section(tree: Node, title: str) -> str:
     ctx = Context()
-
     main_steps = list(tree.children) if tree.rule == "seq" else [tree]
-    n_steps = len(main_steps)
 
-    main_step_info = []
-    for idx, step_node in enumerate(main_steps):
-        if n_steps == 1:
-            label = r"\mathit{ini}"
-        elif idx == 0:
-            label = r"\mathit{ini}"
-        elif idx == n_steps - 1:
-            label = r"\mathit{fin}"
-        else:
-            label = str(idx)
-
-        root_id = split_tree(step_node, ctx)
-        if root_id:
-            main_step_info.append((root_id, label))
+    for step_node in main_steps:
+        split_tree(step_node, ctx)
 
     if not ctx.subtrees:
         return rf"\section*{{{title}}}"
 
-    tree_display_map = {}
-    subtree_step_map = {}
-    tex_by_id = {uid: tex for uid, tex in ctx.subtrees}
-
-    global_counter = 1
-    for step_idx, (root_id, _) in enumerate(main_step_info):
-        queue = [root_id]
-        visited_in_step = set()
-        while queue:
-            curr = queue.pop(0)
-            if curr in visited_in_step:
-                continue
-            visited_in_step.add(curr)
-            subtree_step_map[curr] = step_idx
-
-            if curr not in tree_display_map:
-                tree_display_map[curr] = str(global_counter)
-                global_counter += 1
-
-            tex = tex_by_id.get(curr, "")
-            child_ids = re.findall(r"@@T_(\d+)@@", tex)
-            for cid in child_ids:
-                if cid not in visited_in_step:
-                    queue.append(cid)
-
-    for uid, _ in ctx.subtrees:
-        if uid not in tree_display_map:
-            tree_display_map[uid] = str(global_counter)
-            global_counter += 1
-
-    init_sig_id, final_sig_id = get_init_and_final_sigma_ids(tree, ctx)
-    sigma_display_map = {}
-
-    if init_sig_id is not None:
-        sigma_display_map[init_sig_id] = r"\sigma_{\mathit{ini}}"
-    if final_sig_id is not None and final_sig_id != init_sig_id:
-        sigma_display_map[final_sig_id] = r"\sigma_{\mathit{fin}}"
-
-    current_sig_index = 1
-    for sig_id in ctx.sigma_raw_texts:
-        if sig_id not in sigma_display_map:
-            sigma_display_map[sig_id] = rf"\sigma_{{{current_sig_index}}}"
-            current_sig_index += 1
+    tree_display_map = {uid: str(idx + 1) for idx, (uid, _) in enumerate(ctx.subtrees)}
 
     derivations_tex_list = []
-    current_step = None
-
-    for uid, tex in ctx.subtrees:
-        my_display = tree_display_map.get(uid, uid)
-        step_of_uid = subtree_step_map.get(uid, None)
-
-        if current_step is not None and step_of_uid is not None and step_of_uid != current_step:
+    for idx, (uid, tex) in enumerate(ctx.subtrees):
+        if idx > 0:
             derivations_tex_list.append(r"\[ \Downarrow \]")
 
-        if step_of_uid is not None:
-            current_step = step_of_uid
-
-        def replace_tree_placeholder(match):
-            cid = match.group(1)
-            return rf"\mathcal{{T}}_{{{tree_display_map.get(cid, cid)}}}"
-
-        def replace_sigma_placeholder(match):
-            sig_id = int(match.group(1))
-            return sigma_display_map.get(sig_id, f"\\sigma_{{{sig_id}}}")
-
-        final_tex = re.sub(r"@@T_(\d+)@@", replace_tree_placeholder, tex)
-        final_tex = re.sub(r"@@SIG_(\d+)@@", replace_sigma_placeholder, final_tex)
-
-        # ÁRBOLES: Ecuación LaTeX normal a tamaño real 100% (sin reescalados)
-        derivations_tex_list.append(rf"\[ \mathcal{{T}}_{{{my_display}}} = {final_tex} \]")
+        final_tex = re.sub(r"@@T_(\d+)@@", lambda m: rf"\mathcal{{T}}_{{{tree_display_map.get(m.group(1), m.group(1))}}}", tex)
+        final_tex = re.sub(r"@@SIG_(\d+)@@", lambda m: f"\\sigma_{{{int(m.group(1)) + 1}}}", final_tex)
+        derivations_tex_list.append(rf"\[ \mathcal{{T}}_{{{tree_display_map[uid]}}} = {final_tex} \]")
 
     derivations_tex = "\n\\vspace{0.1cm}\n".join(derivations_tex_list)
 
-    # SENTENCIAS: parbox para forzar salto de línea automático si el código impreso es largo
-    stmt_rows = []
-    for name, value in ctx.statement_values.items():
-        stmt_rows.append(rf"{name} &= \parbox[t]{{0.85\linewidth}}{{$\raggedright {value}$}} \\")
+    stmt_rows = [rf"{name} &= \parbox[t]{{0.85\linewidth}}{{$\raggedright {value}$}} \\" for name, value in ctx.statement_values.items()]
+    statements_tex = f"\n\\subsubsection*{{Sentencias Abreviadas}}\n\\begin{{align*}}\n" + "\n".join(stmt_rows) + f"\n\\end{{align*}}" if stmt_rows else ""
 
-    statements_tex = "\n".join(stmt_rows)
-    if statements_tex:
-        statements_tex = (
-            rf"\subsubsection*{{Sentencias Abreviadas}}" + "\n" +
-            rf"\begin{{align*}}" + "\n" + statements_tex + "\n" + rf"\end{{align*}}"
-        )
-
-    # ESTADOS: Uso de multicols (3 columnas verticales) que evita desbordar la memoria TeX
-    state_items = []
-    for sig_id, clean_text in ctx.sigma_raw_texts.items():
-        lhs = sigma_display_map[sig_id]
-        rhs = ctx.format_state_value(clean_text)
-        state_items.append(rf"\noindent ${lhs} = {rhs}$ \par")
-
-    states_tex = "\n".join(state_items)
-    if states_tex:
-        states_tex = (
-            rf"\subsubsection*{{Estados}}" + "\n" +
-            rf"\begin{{multicols}}{{3}}" + "\n" +
-            states_tex + "\n" +
-            rf"\end{{multicols}}"
-        )
+    state_items = [rf"\noindent $\sigma_{{{sig_id + 1}}} = {ctx.format_state_value(clean_text)}$ \par" for sig_id, clean_text in ctx.sigma_raw_texts.items()]
+    states_tex = f"\n\\subsubsection*{{Estados Registrados}}\n\\begin{{multicols}}{{3}}\n" + "\n".join(state_items) + f"\n\\end{{multicols}}" if state_items else ""
 
     return rf"""\section*{{{title}}}
 
@@ -505,49 +320,93 @@ def build_semantics_section(tree: Node, title: str) -> str:
 """
 
 
-def generate_single_latex(tree: Node, semantics_name: str) -> str:
-    title = "Semántica Natural (NS)" if semantics_name == "ns" else "Semántica Operacional Estructurada (SOS)"
-    section_body = build_semantics_section(tree, title)
+def extract_search_results(output: str, semantics: str) -> list[Node]:
+    # Captura directamente la asignación X:Tree --> ... hasta el siguiente bloque de Maude
+    pattern = r"[X_a-zA-Z0-9]+:(?:Tree|Result|SeqSOS|Config)\s*-->\s*(.*?)(?=\n\s*Solution|\n\s*No more solutions|\n\s*Bye\.|\Z)"
+    solutions = re.findall(pattern, output, re.DOTALL)
+
+    if not solutions:
+        match_single = re.search(r"result\s+[^:]+:\s*(.*)", output, re.DOTALL)
+        if match_single:
+            term = match_single.group(1).split("\nBye.")[0].strip()
+            return [parse_tree(term, semantics)]
+        raise RuntimeError("No se encontraron soluciones válidas en la salida de Maude.\n" + output)
+
+    return [parse_tree(term.strip(), semantics) for term in solutions]
+
+
+def run_maude_search(program_term: str, main_file: Path, semantics: str) -> list[Node]:
+    maude = shutil.which("maude")
+    if not maude:
+        raise RuntimeError("No se encuentra 'maude' en PATH.")
+
+    module = "SOS-WHILE-PROOFS" if semantics == "sos" else "NS-WHILE-PROOFS"
+    search_cmd = f"search in {module} : run({program_term}) =>! X:Tree .\nquit\n" if semantics == "sos" else f"search in {module} : {program_term} =>! X:Tree .\nquit\n"
+
+    process = subprocess.run(
+        [maude, "-no-banner", main_file.name],
+        input=search_cmd, text=True, capture_output=True, cwd=main_file.parent
+    )
+    return extract_search_results(process.stdout + process.stderr, semantics)
+
+
+def generate_multipage_pdf(trees: list[Node], mode_label: str) -> str:
+    n_branches = len(trees)
+    pages = []
+
+    for idx, tree in enumerate(trees, start=1):
+        title = f"Rama {idx} de {n_branches} ({mode_label})"
+        pages.append(build_semantics_section(tree, title))
+
+    full_body = "\n\n\\newpage\n\n".join(pages)
 
     return rf"""\documentclass[12pt,a4paper]{{article}}
 \usepackage[margin=1.2cm, landscape]{{geometry}}
 \usepackage{{amsmath}}
 \usepackage{{amssymb}}
-\usepackage{{graphicx}}
 \usepackage{{multicol}}
 \allowdisplaybreaks
 \pagestyle{{empty}}
 \begin{{document}}
 
-{section_body}
+\title{{\textbf{{Exploración Semántica No Determinista ($S_1 \mathbin{{\mathbf{{or}}}} S_2$)}}}}
+\date{{\vspace{{-1cm}}}}
+\maketitle
+
+{full_body}
 
 \end{{document}}
 """
 
 
-def generate_comparison_latex(tree_ns: Node, tree_sos: Node) -> str:
-    section_ns = build_semantics_section(tree_ns, "1. Semántica Natural (NS - Big-Step)")
-    section_sos = build_semantics_section(tree_sos, "2. Semántica Operacional Estructurada (SOS - Small-Step)")
+def generate_comparison_latex(trees_ns: list[Node], trees_sos: list[Node]) -> str:
+    pages = []
+
+    for idx, tree_ns in enumerate(trees_ns, start=1):
+        title = f"1. Semántica Natural (NS) -- Rama {idx} de {len(trees_ns)}" if len(trees_ns) > 1 else "1. Semántica Natural (NS)"
+        pages.append(build_semantics_section(tree_ns, title))
+
+    for idx, tree_sos in enumerate(trees_sos, start=1):
+        title = f"2. Semántica SOS -- Rama {idx} de {len(trees_sos)}" if len(trees_sos) > 1 else "2. Semántica SOS"
+        pages.append(build_semantics_section(tree_sos, title))
+
+    full_body = "\n\n\\newpage\n\n".join(pages)
 
     return rf"""\documentclass[12pt,a4paper]{{article}}
 \usepackage[margin=1.2cm, landscape]{{geometry}}
 \usepackage{{amsmath}}
 \usepackage{{amssymb}}
-\usepackage{{graphicx}}
 \usepackage{{multicol}}
 \allowdisplaybreaks
 \pagestyle{{empty}}
 \begin{{document}}
 
-\title{{\textbf{{Comparativa de Semánticas Formales (WHILE Enriquecido)}}}}
-\date{{\vspace{{-1cm}}}}
-\maketitle
+\begin{{center}}
+  {{\bfseries\Large Comparativa de Semánticas Formales (NS vs SOS)}}
+\end{{center}}
+\vspace{{4pt}}
 
-{section_ns}
-
-\newpage
-
-{section_sos}
+{full_body}
 
 \end{{document}}
 """
@@ -556,7 +415,7 @@ def generate_comparison_latex(tree_ns: Node, tree_sos: Node) -> str:
 def compile_pdf_in_temp(latex_code: str, output_pdf_path: Path) -> None:
     pdflatex = shutil.which("pdflatex")
     if not pdflatex:
-        raise RuntimeError("No se encuentra 'pdflatex' en el PATH. Instala TeX Live en tu sistema.")
+        raise RuntimeError("No se encuentra 'pdflatex' en PATH.")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
@@ -565,15 +424,12 @@ def compile_pdf_in_temp(latex_code: str, output_pdf_path: Path) -> None:
 
         process = subprocess.run(
             [pdflatex, "-interaction=nonstopmode", "-halt-on-error", tex_file.name],
-            cwd=tmp_path,
-            text=True,
-            capture_output=True,
+            cwd=tmp_path, text=True, capture_output=True
         )
         if process.returncode != 0:
             raise RuntimeError("Error al compilar LaTeX:\n\n" + process.stdout)
 
-        generated_pdf = tmp_path / "derivation.pdf"
-        shutil.copy(generated_pdf, output_pdf_path)
+        shutil.copy(tmp_path / "derivation.pdf", output_pdf_path)
 
 
 def main() -> None:
@@ -600,28 +456,24 @@ def main() -> None:
     if not main_file.exists():
         raise FileNotFoundError("No se encontró el archivo 'main.maude' en el directorio actual ni junto al script.")
 
-    program_term = get_program_term(program_file)
+    program = program_file.read_text(encoding="utf-8").strip().rstrip(".")
+    program_term = program if program.startswith("<") else f"< {program} , empty >"
 
     if mode == "compare":
-        print("Modo Comparativa activado: Evaluando en NS y SOS...")
-        tree_ns = run_ns(program_term, main_file)
-        tree_sos = run_sos(program_term, main_file)
+        print("Modo Comparativa activado: Buscando ejecuciones en NS y SOS...")
+        trees_ns = run_maude_search(program_term, main_file, "ns")
+        trees_sos = run_maude_search(program_term, main_file, "sos")
+        print(f"Ramas encontradas -> NS: {len(trees_ns)}, SOS: {len(trees_sos)}")
         print("Generando LaTeX comparativo y compilando...")
-        latex_code = generate_comparison_latex(tree_ns, tree_sos)
+        latex_code = generate_comparison_latex(trees_ns, trees_sos)
     else:
-        semantics_module = "SOS-WHILE-PROOFS" if mode == "sos" else "NS-WHILE-PROOFS"
-        print(f"Evaluando programa bajo el módulo: {semantics_module}...")
-
-        if mode == "sos":
-            tree = run_sos(program_term, main_file)
-        else:
-            tree = run_ns(program_term, main_file)
-
-        print("Generando LaTeX y compilando...")
-        latex_code = generate_single_latex(tree, mode)
+        print(f"Buscando ejecuciones no deterministas en Maude ({mode.upper()})...")
+        trees = run_maude_search(program_term, main_file, mode)
+        print(f"Se detectaron {len(trees)} rama(s) de ejecución. Generando LaTeX multipágina...")
+        latex_code = generate_multipage_pdf(trees, mode.upper())
 
     compile_pdf_in_temp(latex_code, output_pdf)
-    print(f"¡Éxito! PDF generado delegando la ejecución a Maude: {output_pdf}")
+    print(f"¡Éxito! PDF generado correctamente: {output_pdf}")
 
 
 if __name__ == "__main__":

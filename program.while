@@ -1,3 +1,1 @@
-'y := 0 ;
-for 'x := 0 to 1000 do
-    assert 'x <=? 999 before 'y := 'y ++ 1
+'x := 5 ; 'x := 0 or ('x := 1 or 'x := 99)

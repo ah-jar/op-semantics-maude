@@ -16,5 +16,7 @@ fmod WHILE-SYNTAX is
   op repeat_until_ : Stat Cond -> Stat .
   op for_to_do_ : Assign Exp Stat -> Stat .
   op assert_before_ : Cond Stat -> Stat .
+  op _or_ : Stat Stat -> Stat .
+  op _par_ : Stat Stat -> Stat .
 
 endfm
