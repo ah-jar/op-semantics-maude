@@ -27,6 +27,10 @@ mod SOS-WHILE-PROOFS is
   op assertsos : Stat State Stat State -> Tree .
   op or1sos : Stat State Stat State -> Tree .
   op or2sos : Stat State Stat State -> Tree .
+  op par1sos : Stat State Tree Stat State -> Tree .
+  op par2sos : Stat State Tree Stat State -> Tree .
+  op par3sos : Stat State Tree Stat State -> Tree .
+  op par4sos : Stat State Tree Stat State -> Tree .
 
 
   op finalState : Tree -> State .
@@ -36,7 +40,7 @@ mod SOS-WHILE-PROOFS is
   vars M M' M'' : State .
   vars Q : Qid .
   vars E E' : Exp .
-  vars S S' S1 S1' S2 : Stat .
+  vars S S' S1 S1' S2 S2' : Stat .
   vars T T' : Tree .
   vars C : Cond .
 
@@ -56,6 +60,10 @@ mod SOS-WHILE-PROOFS is
   eq finalStat(assertsos(S, M, S', M')) = S' .
   eq finalStat(or1sos(S, M, S', M')) = S' .
   eq finalStat(or2sos(S, M, S', M')) = S' .
+  eq finalStat(par1sos(S, M, T, S', M')) = S' .
+  eq finalStat(par2sos(S, M, T, S', M')) = S' .
+  eq finalStat(par3sos(S, M, T, S', M')) = S' .
+  eq finalStat(par4sos(S, M, T, S', M')) = S' .
 
 
   eq finalState(asssos(S, M, M')) = M' .
@@ -72,6 +80,11 @@ mod SOS-WHILE-PROOFS is
   eq finalState(assertsos(S, M, S', M')) = M' .
   eq finalState(or1sos(S, M, S', M')) = M' .
   eq finalState(or2sos(S, M, S', M')) = M' .
+  eq finalState(par1sos(S, M, T, S', M')) = M' .
+  eq finalState(par2sos(S, M, T, S', M')) = M' .
+  eq finalState(par3sos(S, M, T, S', M')) = M' .
+  eq finalState(par4sos(S, M, T, S', M')) = M' .
+
 
   op isAbort : Tree -> Bool .
   eq isAbort(abortsos(S, M, M')) = true .
@@ -145,6 +158,41 @@ mod SOS-WHILE-PROOFS is
 
   rl [or2] : 
     < S or S' , M > => or2sos(S or S', M, S', M) .
+
+  crl [par1] : 
+    < S1 par S2 , M > => 
+    par1sos(S1 par S2, M, T, S1' par S2, M')
+    if 
+      < S1 , M > => T 
+      /\ isTerminal(T) = false
+      /\ M' := finalState(T)
+      /\ S1' := finalStat(T) .
+
+  crl [par2] :
+    < S1 par S2 , M > => 
+    par2sos(S1 par S2, M, T, S2, M')
+    if 
+      < S1 , M > => T 
+      /\ M' := finalState(T) 
+      /\ isTerminal(T) = true .
+
+  crl [par3] : 
+    < S1 par S2 , M > => 
+    par3sos(S1 par S2, M, T, S1 par S2', M')
+    if 
+      < S2 , M > => T 
+      /\ isTerminal(T) = false
+      /\ M' := finalState(T)
+      /\ S2' := finalStat(T) .
+
+  crl [par4] :
+    < S1 par S2 , M > => 
+    par4sos(S1 par S2, M, T, S1, M')
+    if 
+      < S2 , M > => T 
+      /\ M' := finalState(T) 
+      /\ isTerminal(T) = true .
+
 
 
   *** CIERRE TRANSITIVO

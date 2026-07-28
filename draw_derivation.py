@@ -29,6 +29,16 @@ class Node:
     is_stuck: bool = False
 
 
+def check_ns_compatibility(program_text: str) -> None:
+    """Verifica que el programa no contenga concurrencia si se va a ejecutar en NS."""
+    if re.search(r"\bpar\b", program_text) or "|||" in program_text:
+        sys.exit(
+            "\n[Error de Semántica] El operador de concurrencia 'par' (|||) "
+            "no está soportado en Semántica Natural (NS).\n"
+            "Ejecute el script en modo SOS mediante el modificador '--sos'.\n"
+        )
+
+
 def split_arguments(text: str) -> list[str]:
     parts, start, depth = [], 0, 0
     for i, char in enumerate(text):
@@ -57,6 +67,10 @@ def parse_tree(term: str, semantics: str = "ns") -> Node:
 
     constructor = match.group(1)
     args = split_arguments(match.group(2))
+
+    # Rechazo explícito de cualquier constructor con 'par' en Semántica Natural
+    if "par" in constructor and semantics == "ns":
+        raise ValueError("El operador 'par' no está soportado en Semántica Natural (NS).")
 
     # --- CIERRE TRANSITIVO (SOS) ---
     if constructor == "seqsos":
@@ -134,6 +148,14 @@ def parse_tree(term: str, semantics: str = "ns") -> Node:
         return Node("or1", args[0], args[1], args[3], next_stat=args[2], semantics="sos")
     if constructor == "or2sos" and len(args) == 4:
         return Node("or2", args[0], args[1], args[3], next_stat=args[2], semantics="sos")
+    if constructor == "par1sos" and len(args) == 5:
+        return Node("par^1", args[0], args[1], args[4], (parse_tree(args[2], "sos"),), next_stat=args[3], semantics="sos")
+    if constructor == "par2sos" and len(args) == 5:
+        return Node("par^2", args[0], args[1], args[4], (parse_tree(args[2], "sos"),), next_stat=args[3], semantics="sos")
+    if constructor == "par3sos" and len(args) == 5:
+        return Node("par^3", args[0], args[1], args[4], (parse_tree(args[2], "sos"),), next_stat=args[3], semantics="sos")
+    if constructor == "par4sos" and len(args) == 5:
+        return Node("par^4", args[0], args[1], args[4], (parse_tree(args[2], "sos"),), next_stat=args[3], semantics="sos")
 
     raise ValueError(f"Constructor no soportado: {constructor}/{len(args)}")
 
@@ -157,12 +179,17 @@ def statement_latex(text: str) -> str:
         ("<=?", r"\leq"), ("=?", "="), ("&&?", r"\land"),
         ("!", r"\neg"), ("++", "+"), ("**", r"\cdot"),
         ("--", "-"), (":=", r"\mathrel{:=}"),
+        ("|||", r"\mathbin{|||}"), ("||", r"\mathbin{||}"),
     ]
     for old, new in replacements:
         text = text.replace(old, new)
 
-    for word in ("skip", "abort", "if", "then", "else", "while", "do", "repeat", "until", "for", "to", "assert", "before", "or", "true", "false"):
-        text = re.sub(rf"\b{word}\b", rf"\\mathbf{{{word}}}", text)
+    text = re.sub(r"\bpar\b", lambda _: r"\mathbin{|||}", text)
+    text = re.sub(r"\bor\b", lambda _: r"\mathbin{||}", text)
+
+    keywords = ("skip", "abort", "if", "then", "else", "while", "do", "repeat", "until", "for", "to", "assert", "before", "true", "false")
+    for word in keywords:
+        text = re.sub(rf"\b{word}\b", lambda m, w=word: rf"\mathbf{{{w}}}", text)
 
     for i, variable in enumerate(variables):
         text = text.replace(f"@@V{i}@@", variable)
@@ -321,7 +348,6 @@ def build_semantics_section(tree: Node, title: str) -> str:
 
 
 def extract_search_results(output: str, semantics: str) -> list[Node]:
-    # Captura directamente la asignación X:Tree --> ... hasta el siguiente bloque de Maude
     pattern = r"[X_a-zA-Z0-9]+:(?:Tree|Result|SeqSOS|Config)\s*-->\s*(.*?)(?=\n\s*Solution|\n\s*No more solutions|\n\s*Bye\.|\Z)"
     solutions = re.findall(pattern, output, re.DOTALL)
 
@@ -369,7 +395,7 @@ def generate_multipage_pdf(trees: list[Node], mode_label: str) -> str:
 \pagestyle{{empty}}
 \begin{{document}}
 
-\title{{\textbf{{Exploración Semántica No Determinista ($S_1 \mathbin{{\mathbf{{or}}}} S_2$)}}}}
+\title{{\textbf{{Exploración Semántica No Determinista y Concurrente ($S_1 \mathbin{{|||}} S_2$)}}}}
 \date{{\vspace{{-1cm}}}}
 \maketitle
 
@@ -460,6 +486,7 @@ def main() -> None:
     program_term = program if program.startswith("<") else f"< {program} , empty >"
 
     if mode == "compare":
+        check_ns_compatibility(program)
         print("Modo Comparativa activado: Buscando ejecuciones en NS y SOS...")
         trees_ns = run_maude_search(program_term, main_file, "ns")
         trees_sos = run_maude_search(program_term, main_file, "sos")
@@ -467,6 +494,8 @@ def main() -> None:
         print("Generando LaTeX comparativo y compilando...")
         latex_code = generate_comparison_latex(trees_ns, trees_sos)
     else:
+        if mode == "ns":
+            check_ns_compatibility(program)
         print(f"Buscando ejecuciones no deterministas en Maude ({mode.upper()})...")
         trees = run_maude_search(program_term, main_file, mode)
         print(f"Se detectaron {len(trees)} rama(s) de ejecución. Generando LaTeX multipágina...")
