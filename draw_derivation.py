@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Ejecuta Maude vía 'search', extrae todas las ramas de ejecución no deterministas (or, par)
+Ejecuta Maude vía 'search', extrae todas las ramas de ejecución no deterministas (or, par, protect)
 o deterministas, convierte los términos de prueba en árboles LaTeX y genera un PDF multipágina.
 Soporta los modos --ns, --sos y --compare.
 """
@@ -30,11 +30,11 @@ class Node:
 
 
 def check_ns_compatibility(program_text: str) -> None:
-    """Verifica que el programa no contenga concurrencia si se va a ejecutar en NS."""
-    if re.search(r"\bpar\b", program_text) or "|||" in program_text:
+    """Verifica que el programa no contenga concurrencia o atomicidad si se va a ejecutar en NS."""
+    if re.search(r"\b(par|protect)\b", program_text) or "||" in program_text:
         sys.exit(
-            "\n[Error de Semántica] El operador de concurrencia 'par' (|||) "
-            "no está soportado en Semántica Natural (NS).\n"
+            "\n[Error de Semántica] Los operadores 'par' (||) y 'protect' "
+            "no están soportados en Semántica Natural (NS).\n"
             "Ejecute el script en modo SOS mediante el modificador '--sos'.\n"
         )
 
@@ -68,9 +68,9 @@ def parse_tree(term: str, semantics: str = "ns") -> Node:
     constructor = match.group(1)
     args = split_arguments(match.group(2))
 
-    # Rechazo explícito de cualquier constructor con 'par' en Semántica Natural
-    if "par" in constructor and semantics == "ns":
-        raise ValueError("El operador 'par' no está soportado en Semántica Natural (NS).")
+    # Rechazo explícito de constructores concurrentes/atómicos en Semántica Natural
+    if ("par" in constructor or "protect" in constructor) and semantics == "ns":
+        raise ValueError("Los operadores 'par' y 'protect' no están soportados en Semántica Natural (NS).")
 
     # --- CIERRE TRANSITIVO (SOS) ---
     if constructor == "seqsos":
@@ -156,6 +156,8 @@ def parse_tree(term: str, semantics: str = "ns") -> Node:
         return Node("par^3", args[0], args[1], args[4], (parse_tree(args[2], "sos"),), next_stat=args[3], semantics="sos")
     if constructor == "par4sos" and len(args) == 5:
         return Node("par^4", args[0], args[1], args[4], (parse_tree(args[2], "sos"),), next_stat=args[3], semantics="sos")
+    if constructor == "protectsos" and len(args) == 4:
+        return Node("protect", args[0], args[1], args[3], (parse_tree(args[2], "sos"),), semantics="sos")
 
     raise ValueError(f"Constructor no soportado: {constructor}/{len(args)}")
 
@@ -175,17 +177,22 @@ def statement_latex(text: str) -> str:
     text = re.sub(r"\s+", " ", text.strip())
     text = re.sub(r"'([A-Za-z0-9_-]+)", save_variable, text)
 
+    # --- TRANSFORMACIÓN DE PROTECT A < S > ---
+    text = re.sub(r"\bprotect\s*\((.*?)\)", r"\\langle \1 \\rangle", text)
+    text = re.sub(r"\bprotect\s+([^\(\)].*)", r"\\langle \1 \\rangle", text)
+
     replacements = [
         ("<=?", r"\leq"), ("=?", "="), ("&&?", r"\land"),
         ("!", r"\neg"), ("++", "+"), ("**", r"\cdot"),
         ("--", "-"), (":=", r"\mathrel{:=}"),
-        ("|||", r"\mathbin{|||}"), ("||", r"\mathbin{||}"),
+        ("|||", r"\mathbin{||}"), ("||", r"\mathbin{||}"),
     ]
     for old, new in replacements:
         text = text.replace(old, new)
 
-    text = re.sub(r"\bpar\b", lambda _: r"\mathbin{|||}", text)
-    text = re.sub(r"\bor\b", lambda _: r"\mathbin{||}", text)
+    text = re.sub(r"\bpar\b", lambda _: r"\mathbin{||}", text)
+    text = re.sub(r"\bor\b", lambda _: r"\mathbin{|}", text)
+    text = re.sub(r"(?<!\|)\|(?!\|)", lambda _: r"\mathbin{|}", text)
 
     keywords = ("skip", "abort", "if", "then", "else", "while", "do", "repeat", "until", "for", "to", "assert", "before", "true", "false")
     for word in keywords:
@@ -281,13 +288,20 @@ def format_rule(node: Node, child_derivs: list[str], ctx: Context) -> str:
 
 def split_tree(node: Node, ctx: Context) -> str:
     if node.rule == "seq":
+        child_ids = []
         for child in node.children:
-            split_tree(child, ctx)
-        return ""
+            cid = split_tree(child, ctx)
+            if cid:
+                child_ids.extend(cid.split(","))
+        return ",".join(child_ids)
 
     child_derivs = []
     for child in node.children:
-        if child.children:
+        if child.rule == "seq":
+            cid = split_tree(child, ctx)
+            if cid:
+                child_derivs.append(f"@@T_{cid}@@")
+        elif child.children:
             child_id = split_tree(child, ctx)
             child_derivs.append(f"@@T_{child_id}@@")
         else:
@@ -320,12 +334,21 @@ def build_semantics_section(tree: Node, title: str) -> str:
 
     tree_display_map = {uid: str(idx + 1) for idx, (uid, _) in enumerate(ctx.subtrees)}
 
+    def replace_tree_ref(m: re.Match) -> str:
+        raw_ids = m.group(1).split(",")
+        mapped = [
+            rf"\mathcal{{T}}_{{{tree_display_map[i]}}}"
+            for i in raw_ids
+            if i in tree_display_map
+        ]
+        return r", \; ".join(mapped) if mapped else r"\mathcal{T}"
+
     derivations_tex_list = []
     for idx, (uid, tex) in enumerate(ctx.subtrees):
         if idx > 0:
             derivations_tex_list.append(r"\[ \Downarrow \]")
 
-        final_tex = re.sub(r"@@T_(\d+)@@", lambda m: rf"\mathcal{{T}}_{{{tree_display_map.get(m.group(1), m.group(1))}}}", tex)
+        final_tex = re.sub(r"@@T_([0-9,]+)@@", replace_tree_ref, tex)
         final_tex = re.sub(r"@@SIG_(\d+)@@", lambda m: f"\\sigma_{{{int(m.group(1)) + 1}}}", final_tex)
         derivations_tex_list.append(rf"\[ \mathcal{{T}}_{{{tree_display_map[uid]}}} = {final_tex} \]")
 
@@ -395,7 +418,7 @@ def generate_multipage_pdf(trees: list[Node], mode_label: str) -> str:
 \pagestyle{{empty}}
 \begin{{document}}
 
-\title{{\textbf{{Exploración Semántica No Determinista y Concurrente ($S_1 \mathbin{{|||}} S_2$)}}}}
+\title{{\textbf{{Exploración Semántica No Determinista y Concurrente ($S_1 \mathbin{{||}} S_2$)}}}}
 \date{{\vspace{{-1cm}}}}
 \maketitle
 

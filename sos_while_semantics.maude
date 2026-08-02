@@ -91,5 +91,9 @@ mod SOS-WHILE-SEMANTICS is
       < S1 par S2 , M > => < S1 , M' > 
       if < S2 , M > => M' .
 
+    crl [protect] :
+      < protect S , M > => M'
+      if < S , M > => M' .
+
 
 endm

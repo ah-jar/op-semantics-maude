@@ -18,5 +18,6 @@ fmod WHILE-SYNTAX is
   op assert_before_ : Cond Stat -> Stat .
   op _or_ : Stat Stat -> Stat .
   op _par_ : Stat Stat -> Stat .
+  op protect_ : Stat -> Stat .
 
 endfm

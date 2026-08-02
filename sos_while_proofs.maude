@@ -31,6 +31,7 @@ mod SOS-WHILE-PROOFS is
   op par2sos : Stat State Tree Stat State -> Tree .
   op par3sos : Stat State Tree Stat State -> Tree .
   op par4sos : Stat State Tree Stat State -> Tree .
+  op protectsos : Stat State Tree State -> Tree .
 
 
   op finalState : Tree -> State .
@@ -48,6 +49,8 @@ mod SOS-WHILE-PROOFS is
   eq isTerminal(skipsos(S, M, M')) = true .
   eq isTerminal(abortsos(S, M, M')) = true .
   eq isTerminal(compabortsos(S, M, T, M')) = true .
+  eq isTerminal(protectsos(S, M, T, M')) = true .
+  eq isTerminal(seqsos(T, T')) = isTerminal(T') .
   eq isTerminal(T) = false [owise] .
 
   eq finalStat(comp1sos(S, M, T, S', M')) = S' .
@@ -84,6 +87,7 @@ mod SOS-WHILE-PROOFS is
   eq finalState(par2sos(S, M, T, S', M')) = M' .
   eq finalState(par3sos(S, M, T, S', M')) = M' .
   eq finalState(par4sos(S, M, T, S', M')) = M' .
+  eq finalState(protectsos(S, M, T, M')) = M' .
 
 
   op isAbort : Tree -> Bool .
@@ -193,12 +197,22 @@ mod SOS-WHILE-PROOFS is
       /\ M' := finalState(T) 
       /\ isTerminal(T) = true .
 
+  crl [protect] : 
+    < protect S , M > => 
+    protectsos(protect S, M, T, M')
+    if 
+      run(< S , M >) => T 
+      /\ isTerminal(T) = true
+      /\ M' := finalState(T) .
+
 
 
   *** CIERRE TRANSITIVO
 
   op seqsos : Tree Tree -> Tree [assoc] .
   op run : Config -> Tree .
+
+  eq finalState(seqsos(T, T')) = finalState(T') .
 
   crl [run-step] :
     run(< S1 , M >) => seqsos(T, run(< S1' , M' >))
