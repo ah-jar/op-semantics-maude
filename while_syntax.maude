@@ -5,7 +5,7 @@ fmod WHILE-SYNTAX is
   pr STATE .
 
   sort Stat Assign Decv .
-  subsort Assign Decv < Stat .
+  subsort Assign < Stat .
 
   op abort : -> Stat [ctor] .
   op skip : -> Stat [ctor] .

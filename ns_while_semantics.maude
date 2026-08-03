@@ -11,6 +11,7 @@ mod NS-WHILE-SEMANTICS is
   subsort State < Config .
 
   op <_,_> : Stat State -> Config .
+  op <_,_>D : Decv State -> Config .
   op Bottom : -> State [ctor] .
 
   vars S S' S'' : Stat .
@@ -131,22 +132,22 @@ mod NS-WHILE-SEMANTICS is
   crl [block] :
     < begin D S end , M > => M'' [DV(D) |-> M]
     if 
-      < D , M > => M'
+      < D , M >D => M'
       /\ < S , M' > => M''
       /\ M'' =/= Bottom .
 
   crl [block-abort] :
     < begin D S end , M > => Bottom
     if 
-      < D , M > => M' 
+      < D , M >D => M' 
       /\ < S , M' > => Bottom .
 
   crl [var] :
-    < var Q := E ; D , M > => M'
+    < var Q := E ; D , M >D => M'
     if 
-      < D , M [Q |-> A[E] M] > => M' .
+      < D , M [Q |-> A[E] M] >D => M' .
 
   rl [none] :
-    < emptyDecv , M > => M .   
+    < emptyDecv , M >D => M .   
 
 endm

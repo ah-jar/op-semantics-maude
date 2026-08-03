@@ -11,13 +11,16 @@ mod SOS-WHILE-SEMANTICS is
     subsort State < Config .
 
     op <_,_> : Stat State -> Config .
+    op <_,_>D : Decv State -> Config .
     op Bottom : -> State [ctor] .
+    op restore : State Decv -> Stat .
 
     vars S S' S1 S1' S2 S2' : Stat .
     vars M M' M'' : State .
     vars Q : Qid .
     vars E E' : Exp .
     vars C : Cond .
+    var D : Decv .
 
     rl [assign] :
         < Q := E , M > => M [Q |-> A[E] M] .
@@ -75,7 +78,7 @@ mod SOS-WHILE-SEMANTICS is
     rl [or2] :
       < S or S' , M > => < S' , M > .
 
-    crl [par1] : 
+    ***(crl [par1] : 
       < S1 par S2 , M > => < S1' par S2 , M' >
       if < S1 , M > => < S1' , M' > .
 
@@ -94,6 +97,20 @@ mod SOS-WHILE-SEMANTICS is
     crl [protect] :
       < protect S , M > => M'
       if < S , M > => M' .
+    )
 
+    crl [begin-block] :
+      < begin D S end , M > => < S ; restore(M, D) , M' >
+      if 
+        < D , M >D => M' .
+
+    rl [var] :
+      < var Q := E ; D , M >D => < D , M [Q |-> A[E] M] >D .
+
+    rl [none] :
+      < emptyDecv , M >D => M .
+  
+    rl [end-block] :
+      < restore(M', D) , M > => M [DV(D) |-> M'] .
 
 endm
