@@ -18,12 +18,13 @@ mod NS-WHILE-SEMANTICS is
   vars Q Q' : Qid .
   vars E E' : Exp .
   vars C : Cond .
+  var D : Decv .
 
   rl [assign] :
     < Q := E , M > => M [Q |-> A[E] M] .
 
   rl [skip] :
-    < skip , M > => M .
+  < skip , M > => M .
 
   crl [comp] :
     < (S ; S') , M > => M''
@@ -123,5 +124,29 @@ mod NS-WHILE-SEMANTICS is
   crl [or2] :
     < S or S' , M > => M'
     if < S' , M > => M' .
+
+  *** Se eliminarán de M'' las variables locales declaradas
+  *** que no estuviesen en M
+
+  crl [block] :
+    < begin D S end , M > => M'' [DV(D) |-> M]
+    if 
+      < D , M > => M'
+      /\ < S , M' > => M''
+      /\ M'' =/= Bottom .
+
+  crl [block-abort] :
+    < begin D S end , M > => Bottom
+    if 
+      < D , M > => M' 
+      /\ < S , M' > => Bottom .
+
+  crl [var] :
+    < var Q := E ; D , M > => M'
+    if 
+      < D , M [Q |-> A[E] M] > => M' .
+
+  rl [none] :
+    < emptyDecv , M > => M .   
 
 endm

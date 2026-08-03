@@ -33,6 +33,9 @@ mod NS-WHILE-PROOFS is
   op assertffns : Stat State State -> Tree .
   op or1ns : Stat State Tree State -> Tree .
   op or2ns : Stat State Tree State -> Tree .
+  op blockns : Stat State Tree Tree State -> Tree .
+  op varns : Stat State Tree State -> Tree .
+  op nonens : Stat State State -> Tree .
 
   op finalState : Tree -> State .
 
@@ -42,6 +45,7 @@ mod NS-WHILE-PROOFS is
   vars S S' : Stat .
   vars T T' T'' : Tree .
   vars C : Cond .
+  var D : Decv .
 
   eq finalState(assns(S, M, M')) = M' .
   eq finalState(skipns(S, M, M')) = M' .
@@ -63,6 +67,9 @@ mod NS-WHILE-PROOFS is
   eq finalState(assertffns(S, M, M')) = M' .
   eq finalState(or1ns(S, M, T, M')) = M' .
   eq finalState(or2ns(S, M, T, M')) = M' .
+  eq finalState(blockns(S, M, T, T', M')) = M' .
+  eq finalState(varns(S, M, T, M')) = M' .
+  eq finalState(nonens(S, M, M')) = M' .
 
   rl [assign] :
     < Q := E , M > => assns(Q := E, M, M [Q |-> A[E] M]) .
@@ -215,6 +222,35 @@ mod NS-WHILE-PROOFS is
     if 
       < S' , M > => T 
       /\ M' := finalState(T) .
+
+  crl [block] : 
+    < begin D S end , M > => 
+    blockns(begin D S end, M, T, T', M'' [DV(D) |-> M])
+    if 
+      < D , M > => T 
+      /\ M' := finalState(T)
+      /\ < S , M' > => T'
+      /\ M'' := finalState(T')
+      /\ M'' =/= Bottom .
+      
+  crl [block] : 
+    < begin D S end , M > => 
+    blockns(begin D S end, M, T, T', Bottom)
+    if 
+      < D , M > => T 
+      /\ M' := finalState(T)
+      /\ < S , M' > => T'
+      /\ finalState(T') = Bottom .
+
+  crl [var] :
+    < var Q := E ; D , M > => 
+    varns(var Q := E ; D, M, T, M')
+    if 
+      < D , M [Q |-> A[E] M] > => T 
+      /\ M' := finalState(T) .
+
+  rl [none] :
+    < emptyDecv , M > => nonens(emptyDecv, M, M) .
 
 
 endm

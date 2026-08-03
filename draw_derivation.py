@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""
-Ejecuta Maude vía 'search', extrae todas las ramas de ejecución no deterministas (or, par, protect)
-o deterministas, convierte los términos de prueba en árboles LaTeX y genera un PDF multipágina.
-Soporta los modos --ns, --sos y --compare.
+r"""
+Ejecuta Maude y genera árboles de derivación formal en estricta notación Nielson:
+- Los árboles de derivación usan notación simbólica pura (\sigma_0, \sigma_1, sustituciones
+  \sigma[x |-> A[[a]]\sigma] y restauración \sigma[\text{DV}(D_V) \longmapsto \sigma]), sin conjuntos {...}.
+- La leyenda final explica las equivalencias de cada estado, las sustituciones aplicadas,
+  los valores concretos de las variables y señala \sigma_{ini} y \sigma_{fin}.
 """
 
 import re
@@ -13,7 +15,6 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-# --- ELEVAR LÍMITE DE RECURSIÓN PARA TRAZAS LARGAS/PROFUNDAS ---
 sys.setrecursionlimit(100000)
 
 
@@ -30,13 +31,17 @@ class Node:
 
 
 def check_ns_compatibility(program_text: str) -> None:
-    """Verifica que el programa no contenga concurrencia o atomicidad si se va a ejecutar en NS."""
     if re.search(r"\b(par|protect)\b", program_text) or "||" in program_text:
         sys.exit(
             "\n[Error de Semántica] Los operadores 'par' (||) y 'protect' "
             "no están soportados en Semántica Natural (NS).\n"
             "Ejecute el script en modo SOS mediante el modificador '--sos'.\n"
         )
+
+
+def has_nondeterminism(program_text: str) -> bool:
+    pattern = r"\b(par|or)\b|\|\||\|(?!>)"
+    return bool(re.search(pattern, program_text))
 
 
 def split_arguments(text: str) -> list[str]:
@@ -56,7 +61,6 @@ def split_arguments(text: str) -> list[str]:
 def parse_tree(term: str, semantics: str = "ns") -> Node:
     term = re.sub(r"\s+", " ", term).strip()
 
-    # Detección de estados atascados
     match_run_stuck = re.fullmatch(r"run\(\s*\(?\s*<\s*(.*?)\s*,\s*(.*?)\s*>\s*\)?\s*\)", term)
     if match_run_stuck:
         return Node("stuck", match_run_stuck.group(1).strip(), match_run_stuck.group(2).strip(), "stuck", semantics=semantics, is_stuck=True)
@@ -68,16 +72,14 @@ def parse_tree(term: str, semantics: str = "ns") -> Node:
     constructor = match.group(1)
     args = split_arguments(match.group(2))
 
-    # Rechazo explícito de constructores concurrentes/atómicos en Semántica Natural
     if ("par" in constructor or "protect" in constructor) and semantics == "ns":
         raise ValueError("Los operadores 'par' y 'protect' no están soportados en Semántica Natural (NS).")
 
-    # --- CIERRE TRANSITIVO (SOS) ---
     if constructor == "seqsos":
         children = tuple(parse_tree(arg, "sos") for arg in args if arg != "nilSOS")
         return Node("seq", "", "", "", children, semantics="sos")
 
-    # --- REGLAS DE SEMÁNTICA NATURAL (NS) ---
+    # Reglas Semántica Natural (NS)
     if constructor == "assns" and len(args) == 3:
         return Node("ass", args[0], args[1], args[2], semantics="ns")
     if constructor == "skipns" and len(args) == 3:
@@ -119,7 +121,15 @@ def parse_tree(term: str, semantics: str = "ns") -> Node:
     if constructor == "or2ns" and len(args) == 4:
         return Node("or2", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
 
-    # --- REGLAS DE SEMÁNTICA DE PASO CORTO (SOS) ---
+    # Bloques y declaraciones
+    if constructor == "blockns" and len(args) == 5:
+        return Node("block", args[0], args[1], args[4], (parse_tree(args[2], "ns"), parse_tree(args[3], "ns")), semantics="ns")
+    if constructor == "varns" and len(args) == 4:
+        return Node("var", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
+    if constructor == "nonens" and len(args) == 3:
+        return Node("none", args[0], args[1], args[2], semantics="ns")
+
+    # Reglas SOS
     if constructor == "asssos" and len(args) == 3:
         return Node("ass", args[0], args[1], args[2], semantics="sos")
     if constructor == "skipsos" and len(args) == 3:
@@ -164,7 +174,7 @@ def parse_tree(term: str, semantics: str = "ns") -> Node:
 
 def identifier_latex(name: str) -> str:
     name = name.lstrip("'").replace("_", r"\_")
-    return rf"\mathit{{{name}}}"
+    return r"\mathit{" + name + "}"
 
 
 def statement_latex(text: str) -> str:
@@ -175,9 +185,9 @@ def statement_latex(text: str) -> str:
         return f"@@V{len(variables) - 1}@@"
 
     text = re.sub(r"\s+", " ", text.strip())
+    text = text.replace("emptyDecv", r"\varepsilon")
     text = re.sub(r"'([A-Za-z0-9_-]+)", save_variable, text)
 
-    # --- TRANSFORMACIÓN DE PROTECT A < S > ---
     text = re.sub(r"\bprotect\s*\((.*?)\)", r"\\langle \1 \\rangle", text)
     text = re.sub(r"\bprotect\s+([^\(\)].*)", r"\\langle \1 \\rangle", text)
 
@@ -194,7 +204,11 @@ def statement_latex(text: str) -> str:
     text = re.sub(r"\bor\b", lambda _: r"\mathbin{|}", text)
     text = re.sub(r"(?<!\|)\|(?!\|)", lambda _: r"\mathbin{|}", text)
 
-    keywords = ("skip", "abort", "if", "then", "else", "while", "do", "repeat", "until", "for", "to", "assert", "before", "true", "false")
+    keywords = (
+        "skip", "abort", "if", "then", "else", "while", "do", "repeat", 
+        "until", "for", "to", "assert", "before", "true", "false",
+        "begin", "end", "var"
+    )
     for word in keywords:
         text = re.sub(rf"\b{word}\b", lambda m, w=word: rf"\mathbf{{{w}}}", text)
 
@@ -205,30 +219,74 @@ def statement_latex(text: str) -> str:
     return text
 
 
+def parse_assignment_parts(text: str) -> tuple[str, str]:
+    text = text.strip()
+    if text.startswith("var "):
+        text = text[4:].strip()
+    if ";" in text:
+        text = text.split(";")[0].strip()
+    if ":=" in text:
+        parts = text.split(":=", 1)
+        var_part = identifier_latex(parts[0].strip())
+        expr_part = statement_latex(parts[1].strip())
+        return var_part, expr_part
+    return identifier_latex(text), ""
+
+
+def format_concrete_bindings(raw_text: str) -> str:
+    clean_text = re.sub(r"\s+", " ", raw_text.strip())
+    if clean_text in ("empty", "null", "", "s", "sigma"):
+        return r"\varnothing"
+    bindings = re.findall(r"'?([a-zA-Z0-9_-]+)\s*(?:\|->|:=)\s*(-?\d+|'[a-zA-Z0-9_-]+)", clean_text)
+    if bindings:
+        items = [identifier_latex(k) + r" \mapsto " + (identifier_latex(v) if v.startswith("'") else v) for k, v in bindings]
+        return r"\{" + r",\; ".join(items) + r"\}"
+    return ""
+
+
 class Context:
-    def __init__(self):
-        self.sigma_keys = {}
-        self.sigma_raw_texts = {}
+    def __init__(self, initial_raw: str = "", final_raw: str = ""):
         self.statement_map = {}
         self.statement_values = {}
+        self.raw_to_sigma = {}
+        self.legend_dict = {}
+        self.legend_order = []
         self.subtrees = []
-        self.max_stat_length = 30
+        self.max_stat_length = 35
         self.tree_counter = 0
+        self.sigma_counter = 0
+        self.initial_raw = initial_raw
+        self.final_raw = final_raw
 
-    def get_sigma(self, text: str) -> str:
-        clean_text = re.sub(r"\s+", " ", text.strip())
-        if clean_text == "stuck": return r"\mathbf{stuck}"
-        if clean_text == "Bottom": return r"\bot"
-        if clean_text == "empty": return r"\varnothing"
+    def get_sigma(self, raw_text: str) -> str:
+        clean = re.sub(r"\s+", " ", raw_text.strip())
+        if not clean:
+            clean = "empty"
 
-        norm_key = re.sub(r"[\s'\(\)]+", "", clean_text)
-        if norm_key not in self.sigma_keys:
-            sig_id = len(self.sigma_keys)
-            self.sigma_keys[norm_key] = sig_id
-            self.sigma_raw_texts[sig_id] = clean_text
+        if clean not in self.raw_to_sigma:
+            symbol = r"\sigma_{" + str(self.sigma_counter) + r"}"
+            self.raw_to_sigma[clean] = symbol
+            self.sigma_counter += 1
+            self.legend_order.append(clean)
 
-        sig_id = self.sigma_keys[norm_key]
-        return f"@@SIG_{sig_id}@@"
+            concrete = format_concrete_bindings(clean)
+            self.legend_dict[clean] = {
+                "symbol": symbol,
+                "formula": None,
+                "concrete": concrete
+            }
+
+        return self.raw_to_sigma[clean]
+
+    def register_substitution_legend(self, sigma_symbol: str, substitution_formula: str, raw_after: str) -> None:
+        for raw_key, sym in self.raw_to_sigma.items():
+            if sym == sigma_symbol:
+                if raw_key in self.legend_dict:
+                    self.legend_dict[raw_key]["formula"] = substitution_formula
+                    concrete = format_concrete_bindings(raw_after)
+                    if concrete:
+                        self.legend_dict[raw_key]["concrete"] = concrete
+                break
 
     def get_statement(self, text: str) -> str:
         clean_text = re.sub(r"\s+", " ", text.strip())
@@ -237,53 +295,68 @@ class Context:
         if len(length_check_text) > self.max_stat_length:
             if clean_text not in self.statement_map:
                 i = len(self.statement_map) + 1
-                name = rf"S_{{{i}}}"
+                name = r"S_{" + str(i) + r"}"
                 self.statement_map[clean_text] = name
                 self.statement_values[name] = statement_latex(clean_text)
             return self.statement_map[clean_text]
 
         return statement_latex(clean_text)
 
-    def format_state_value(self, text: str) -> str:
-        if text == "Bottom": return r"\bot"
-        bindings = re.findall(r"'?([a-zA-Z0-9_-]+)\s*(?:\|->|:=)\s*(-?\d+)", text)
-        if bindings:
-            items = [rf"{identifier_latex(name)} \mapsto {value}" for name, value in bindings]
-            return r"\{" + r",\; ".join(items) + r"\}"
-
-        safe = text.replace("_", r"\_").replace("%", r"\%").replace("#", r"\#")
-        return rf"\mathtt{{{safe}}}"
-
 
 def get_transition(node: Node, ctx: Context) -> str:
     stmt = ctx.get_statement(node.statement)
-    left = rf"\left\langle {stmt},\; {ctx.get_sigma(node.before)}\right\rangle"
+    sigma_before = ctx.get_sigma(node.before)
+    left = r"\left\langle " + stmt + r",\; " + sigma_before + r"\right\rangle"
+
+    is_decl = node.rule in ("var", "none")
 
     if node.is_stuck:
-        arrow = r"\mathbin{\not\longrightarrow}" if node.semantics == "ns" else r"\mathbin{\not\Rightarrow}"
+        arrow_base = r"\mathbin{\not\longrightarrow}" if node.semantics == "ns" else r"\mathbin{\not\Rightarrow}"
+        arrow = arrow_base + r"_D" if is_decl else arrow_base
         right = r"\mathbf{stuck}"
     else:
-        arrow = r"\longrightarrow" if node.semantics == "ns" else r"\Rightarrow"
+        arrow_base = r"\longrightarrow" if node.semantics == "ns" else r"\Rightarrow"
+        arrow = arrow_base + r"_D" if is_decl else arrow_base
+
         if node.semantics == "sos" and node.next_stat:
             next_stmt = ctx.get_statement(node.next_stat)
-            right = rf"\left\langle {next_stmt},\; {ctx.get_sigma(node.after)}\right\rangle"
+            sigma_after = ctx.get_sigma(node.after)
+            right = r"\left\langle " + next_stmt + r",\; " + sigma_after + r"\right\rangle"
         else:
-            right = ctx.get_sigma(node.after)
+            if node.rule == "ass":
+                var_latex, expr_latex = parse_assignment_parts(node.statement)
+                right = sigma_before + r"[" + var_latex + r" \mapsto \mathcal{A}\llbracket " + expr_latex + r" \rrbracket " + sigma_before + r"]"
+                sigma_after = ctx.get_sigma(node.after)
+                ctx.register_substitution_legend(sigma_after, right, node.after)
+            elif node.rule == "var" and ":=" in node.statement:
+                var_latex, expr_latex = parse_assignment_parts(node.statement)
+                right = sigma_before + r"[" + var_latex + r" \mapsto \mathcal{A}\llbracket " + expr_latex + r" \rrbracket " + sigma_before + r"]"
+                sigma_after = ctx.get_sigma(node.after)
+                ctx.register_substitution_legend(sigma_after, right, node.after)
+            elif node.rule == "block" and len(node.children) >= 2:
+                body_node = node.children[1]
+                sigma_k = ctx.get_sigma(body_node.after)
+                dv_latex = ctx.get_statement(node.children[0].statement) if node.children else r"D_V"
+                right = sigma_k + r"[\text{DV}(" + dv_latex + r") \longmapsto " + sigma_before + r"]"
+                sigma_after = ctx.get_sigma(node.after)
+                ctx.register_substitution_legend(sigma_after, right, node.after)
+            else:
+                right = ctx.get_sigma(node.after)
 
-    return rf"{left} {arrow} {right}"
+    return left + " " + arrow + " " + right
 
 
 def format_axiom(node: Node, ctx: Context) -> str:
     judgement = get_transition(node, ctx)
     sem_label = "ns" if node.semantics == "ns" else "sos"
-    return rf"{judgement}\;\mathrm{{[{node.rule}_{{{sem_label}}}]}}"
+    return judgement + r"\;\mathrm{[" + node.rule + r"_{" + sem_label + r"}]}"
 
 
 def format_rule(node: Node, child_derivs: list[str], ctx: Context) -> str:
     judgement = get_transition(node, ctx)
     sem_label = "ns" if node.semantics == "ns" else "sos"
     premises = r"\qquad".join(child_derivs)
-    return rf"\frac{{{premises}}}{{{judgement}}}\;\mathrm{{[{node.rule}_{{{sem_label}}}]}}"
+    return r"\frac{" + premises + r"}{" + judgement + r"}\;\mathrm{[" + node.rule + r"_{" + sem_label + r"}]}"
 
 
 def split_tree(node: Node, ctx: Context) -> str:
@@ -322,22 +395,31 @@ def split_tree(node: Node, ctx: Context) -> str:
     return my_id
 
 
+def get_tree_initial_final(tree: Node) -> tuple[str, str]:
+    if tree.rule == "seq" and tree.children:
+        init = get_tree_initial_final(tree.children[0])[0]
+        fin = get_tree_initial_final(tree.children[-1])[1]
+        return init, fin
+    return tree.before, tree.after
+
+
 def build_semantics_section(tree: Node, title: str) -> str:
-    ctx = Context()
+    init_raw, fin_raw = get_tree_initial_final(tree)
+    ctx = Context(initial_raw=init_raw, final_raw=fin_raw)
     main_steps = list(tree.children) if tree.rule == "seq" else [tree]
 
     for step_node in main_steps:
         split_tree(step_node, ctx)
 
     if not ctx.subtrees:
-        return rf"\section*{{{title}}}"
+        return r"\section*{" + title + "}"
 
     tree_display_map = {uid: str(idx + 1) for idx, (uid, _) in enumerate(ctx.subtrees)}
 
     def replace_tree_ref(m: re.Match) -> str:
         raw_ids = m.group(1).split(",")
         mapped = [
-            rf"\mathcal{{T}}_{{{tree_display_map[i]}}}"
+            r"\mathcal{T}_{" + tree_display_map[i] + "}"
             for i in raw_ids
             if i in tree_display_map
         ]
@@ -349,25 +431,50 @@ def build_semantics_section(tree: Node, title: str) -> str:
             derivations_tex_list.append(r"\[ \Downarrow \]")
 
         final_tex = re.sub(r"@@T_([0-9,]+)@@", replace_tree_ref, tex)
-        final_tex = re.sub(r"@@SIG_(\d+)@@", lambda m: f"\\sigma_{{{int(m.group(1)) + 1}}}", final_tex)
-        derivations_tex_list.append(rf"\[ \mathcal{{T}}_{{{tree_display_map[uid]}}} = {final_tex} \]")
+        derivations_tex_list.append(r"\[ \mathcal{T}_{" + tree_display_map[uid] + "} = " + final_tex + r" \]")
 
     derivations_tex = "\n\\vspace{0.1cm}\n".join(derivations_tex_list)
 
-    stmt_rows = [rf"{name} &= \parbox[t]{{0.85\linewidth}}{{$\raggedright {value}$}} \\" for name, value in ctx.statement_values.items()]
-    statements_tex = f"\n\\subsubsection*{{Sentencias Abreviadas}}\n\\begin{{align*}}\n" + "\n".join(stmt_rows) + f"\n\\end{{align*}}" if stmt_rows else ""
+    # Sentencias abreviadas
+    stmt_rows = [name + r" &= \parbox[t]{0.85\linewidth}{$\raggedright " + value + r"$} \\" for name, value in ctx.statement_values.items()]
+    statements_tex = "\n\\subsubsection*{Sentencias Abreviadas}\n\\begin{align*}\n" + "\n".join(stmt_rows) + "\n\\end{align*}" if stmt_rows else ""
 
-    state_items = [rf"\noindent $\sigma_{{{sig_id + 1}}} = {ctx.format_state_value(clean_text)}$ \par" for sig_id, clean_text in ctx.sigma_raw_texts.items()]
-    states_tex = f"\n\\subsubsection*{{Estados Registrados}}\n\\begin{{multicols}}{{3}}\n" + "\n".join(state_items) + f"\n\\end{{multicols}}" if state_items else ""
+    # Leyenda de Estados y Sustituciones
+    legend_rows = []
+    for raw_key in ctx.legend_order:
+        item = ctx.legend_dict[raw_key]
+        sym = item["symbol"]
+        formula = item["formula"]
+        concrete = item["concrete"]
 
-    return rf"""\section*{{{title}}}
+        is_init = (raw_key == ctx.initial_raw or (raw_key in ("s", "sigma", "empty", "null", "") and ctx.initial_raw in ("s", "sigma", "empty", "null", "")))
+        is_fin = (raw_key == ctx.final_raw)
 
-{derivations_tex}
+        tag_init = r" \quad \mathbf{(\sigma_{\text{ini}} - Estado\;Inicial)}"
+        tag_fin = r" \quad \mathbf{(\sigma_{\text{fin}} - Estado\;Final)}"
 
-{statements_tex}
+        if formula:
+            entry = sym + r" \equiv " + formula
+            if concrete and concrete != r"\varnothing":
+                entry += r" = " + concrete
+        elif concrete:
+            if concrete == r"\varnothing":
+                entry = sym + r" \equiv \varnothing \quad (\text{Estado inicial vacío})"
+            else:
+                entry = sym + r" \equiv " + concrete
+        else:
+            entry = sym + r" \equiv \text{Estado del sistema}"
 
-{states_tex}
-"""
+        if is_init:
+            entry += tag_init
+        if is_fin:
+            entry += tag_fin
+
+        legend_rows.append(entry + r" \\")
+
+    legend_tex = "\n\\subsubsection*{Leyenda de Estados y Sustituciones}\n\\begin{align*}\n" + "\n".join(legend_rows) + "\n\\end{align*}"
+
+    return r"\section*{" + title + "}\n\n" + derivations_tex + "\n\n" + statements_tex + "\n\n" + legend_tex
 
 
 def extract_search_results(output: str, semantics: str) -> list[Node]:
@@ -384,17 +491,28 @@ def extract_search_results(output: str, semantics: str) -> list[Node]:
     return [parse_tree(term.strip(), semantics) for term in solutions]
 
 
-def run_maude_search(program_term: str, main_file: Path, semantics: str) -> list[Node]:
+def run_maude_execution(program_term: str, program_raw: str, main_file: Path, semantics: str) -> list[Node]:
     maude = shutil.which("maude")
     if not maude:
         raise RuntimeError("No se encuentra 'maude' en PATH.")
 
     module = "SOS-WHILE-PROOFS" if semantics == "sos" else "NS-WHILE-PROOFS"
-    search_cmd = f"search in {module} : run({program_term}) =>! X:Tree .\nquit\n" if semantics == "sos" else f"search in {module} : {program_term} =>! X:Tree .\nquit\n"
+    is_nondet = has_nondeterminism(program_raw)
+    limit_flag = "" if is_nondet else "[1] "
+
+    if is_nondet:
+        print(f"[{semantics.upper()}] Detectado no determinismo (par/or). Explorando todas las ramas...")
+    else:
+        print(f"[{semantics.upper()}] Programa determinista. Generando un único árbol de derivación...")
+
+    if semantics == "sos":
+        maude_cmd = f"search {limit_flag}in {module} : run({program_term}) =>! X:Tree .\nquit\n"
+    else:
+        maude_cmd = f"search {limit_flag}in {module} : {program_term} =>! X:Tree .\nquit\n"
 
     process = subprocess.run(
         [maude, "-no-banner", main_file.name],
-        input=search_cmd, text=True, capture_output=True, cwd=main_file.parent
+        input=maude_cmd, text=True, capture_output=True, cwd=main_file.parent
     )
     return extract_search_results(process.stdout + process.stderr, semantics)
 
@@ -409,22 +527,26 @@ def generate_multipage_pdf(trees: list[Node], mode_label: str) -> str:
 
     full_body = "\n\n\\newpage\n\n".join(pages)
 
-    return rf"""\documentclass[12pt,a4paper]{{article}}
-\usepackage[margin=1.2cm, landscape]{{geometry}}
-\usepackage{{amsmath}}
-\usepackage{{amssymb}}
-\usepackage{{multicol}}
-\allowdisplaybreaks
-\pagestyle{{empty}}
-\begin{{document}}
+    return r"""\documentclass[12pt,a4paper]{article}
+\usepackage[margin=1.2cm, landscape]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{multicol}
 
-\title{{\textbf{{Exploración Semántica No Determinista y Concurrente ($S_1 \mathbin{{||}} S_2$)}}}}
-\date{{\vspace{{-1cm}}}}
+\newcommand{\llbracket}{\mathopen{[\![}}
+\newcommand{\rrbracket}{\mathclose{]\!]}}
+
+\allowdisplaybreaks
+\pagestyle{empty}
+\begin{document}
+
+\title{\textbf{Derivación Semántica Formal -- Notación Nielson con Estados $\sigma_k$}}
+\date{\vspace{-1cm}}
 \maketitle
 
-{full_body}
+""" + full_body + r"""
 
-\end{{document}}
+\end{document}
 """
 
 
@@ -441,23 +563,27 @@ def generate_comparison_latex(trees_ns: list[Node], trees_sos: list[Node]) -> st
 
     full_body = "\n\n\\newpage\n\n".join(pages)
 
-    return rf"""\documentclass[12pt,a4paper]{{article}}
-\usepackage[margin=1.2cm, landscape]{{geometry}}
-\usepackage{{amsmath}}
-\usepackage{{amssymb}}
-\usepackage{{multicol}}
+    return r"""\documentclass[12pt,a4paper]{article}
+\usepackage[margin=1.2cm, landscape]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{multicol}
+
+\newcommand{\llbracket}{\mathopen{[\![}}
+\newcommand{\rrbracket}{\mathclose{]\!]}}
+
 \allowdisplaybreaks
-\pagestyle{{empty}}
-\begin{{document}}
+\pagestyle{empty}
+\begin{document}
 
-\begin{{center}}
-  {{\bfseries\Large Comparativa de Semánticas Formales (NS vs SOS)}}
-\end{{center}}
-\vspace{{4pt}}
+\begin{center}
+  {\bfseries\Large Comparativa de Semánticas Formales (NS vs SOS)}
+\end{center}
+\vspace{4pt}
 
-{full_body}
+""" + full_body + r"""
 
-\end{{document}}
+\end{document}
 """
 
 
@@ -511,17 +637,16 @@ def main() -> None:
     if mode == "compare":
         check_ns_compatibility(program)
         print("Modo Comparativa activado: Buscando ejecuciones en NS y SOS...")
-        trees_ns = run_maude_search(program_term, main_file, "ns")
-        trees_sos = run_maude_search(program_term, main_file, "sos")
+        trees_ns = run_maude_execution(program_term, program, main_file, "ns")
+        trees_sos = run_maude_execution(program_term, program, main_file, "sos")
         print(f"Ramas encontradas -> NS: {len(trees_ns)}, SOS: {len(trees_sos)}")
         print("Generando LaTeX comparativo y compilando...")
         latex_code = generate_comparison_latex(trees_ns, trees_sos)
     else:
         if mode == "ns":
             check_ns_compatibility(program)
-        print(f"Buscando ejecuciones no deterministas en Maude ({mode.upper()})...")
-        trees = run_maude_search(program_term, main_file, mode)
-        print(f"Se detectaron {len(trees)} rama(s) de ejecución. Generando LaTeX multipágina...")
+        trees = run_maude_execution(program_term, program, main_file, mode)
+        print(f"Se generó el árbol de derivación ({len(trees)} rama(s)). Compilando LaTeX...")
         latex_code = generate_multipage_pdf(trees, mode.upper())
 
     compile_pdf_in_temp(latex_code, output_pdf)

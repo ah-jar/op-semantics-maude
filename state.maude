@@ -3,21 +3,35 @@ fmod STATE is
   pr QID .
   pr INT .
 
-  sort State .
+  sort State QidSet .
+  subsort Qid < QidSet .
 
   op empty : -> State [ctor] .
   op [_:=_] : Qid Int -> State [ctor] .
+  op null : -> QidSet [ctor] .
   op _ _ : State State -> State [assoc comm id: empty] .
   op _ _ : State Qid ~> Int .
   op _[_|->_] : State Qid Int -> State .
+  op _[_|->_] : State QidSet State -> State .
+  op _,_ : QidSet QidSet -> QidSet [assoc comm id: null] .
+  op delete : State Qid -> State .
 
-  vars S : State .
+
+  vars S S' : State .
   vars Q : Qid .
   vars I I' : Int .
+  var Qs : QidSet .
 
   eq ([Q := I] S) Q = I .
   eq ([Q := I] S) [Q |-> I'] = [Q := I'] S .
   eq S [Q |-> I] = S [Q := I] [owise] .
+
+  eq delete([Q := I] S, Q) = S .
+  eq delete(S, Q) = S [owise] .
+
+  eq S [Q , Qs |-> [Q := I] S'] = (S [Q |-> I]) [Qs |-> S'] .
+  eq S [Q , Qs |-> S'] = delete(S, Q) [Qs |-> S'] [owise] .
+  eq S [null |-> S'] = S .
 
 endfm
 
