@@ -1,0 +1,13 @@
+fmod STATE is
+
+  pr NAT .
+  pr INT .
+
+  sort Store Loc .
+  subsort Loc < Nat .
+
+  op sto0 : -> Store [ctor] .
+  
+
+endfm
+

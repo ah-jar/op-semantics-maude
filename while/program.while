@@ -6,7 +6,7 @@ begin
   ) 
   (
     'x := 'x ++ 5 ; 
-    for 'x := 0 to 2 do 
+    for 'x := 0 to 1 do 
       'y := 'y ++ 1
   ) 
 end
