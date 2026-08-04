@@ -1,13 +1,32 @@
-fmod STATE is
+fmod STORE is
 
   pr NAT .
   pr INT .
 
-  sort Store Loc .
-  subsort Loc < Nat .
+  sort Store Loc Mem Next .
+  subsort Nat < Loc .
 
-  op sto0 : -> Store [ctor] .
-  
+  op empty : -> Mem [ctor] .
+  op [_|->_] : Loc Int -> Mem [ctor] .
+  op __ : Mem Mem -> Mem [assoc comm id: empty] .
+  op [next |->_] : Nat -> Next [ctor] .
+  op __ : Mem Next -> Store .
+  op _[_|->_] : Store Loc Int -> Store .
+  op __ : Store Next -> Store . 
+
+  vars M : Mem .
+  vars L : Loc .
+  vars I I' : Int .
+  vars N N' : Nat .
+
+  *** Añadir o modificar memoria
+
+  eq M [L |-> I] [next |-> N] [L |-> I'] = M [L |-> I'] [next |-> N] .
+  eq M [next |-> N] [L |-> I] = M [L |-> I] [next |-> N] [owise] .
+
+
+  *** Modificar next 
+
+  eq M [next |-> N] [next |-> N'] = M [next |-> N'] .
 
 endfm
-
