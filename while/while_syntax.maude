@@ -4,36 +4,20 @@ fmod WHILE-SYNTAX is
   pr B-SYNTAX .
   pr STATE .
 
-  sort Stat Assign Decv .
+  sort Stat Assign .
   subsort Assign < Stat .
 
   op abort : -> Stat [ctor] .
   op skip : -> Stat [ctor] .
-  op emptyDecv : -> Decv [ctor] .
-  op _:=_ : Qid Exp -> Assign .
-  op _;_ : Stat Stat -> Stat [prec 100 assoc] .
-  op if_then_else_ : Cond Stat Stat -> Stat .
-  op while_do_ : Cond Stat -> Stat .
-  op repeat_until_ : Stat Cond -> Stat .
-  op for_to_do_ : Assign Exp Stat -> Stat .
-  op assert_before_ : Cond Stat -> Stat .
-  op _or_ : Stat Stat -> Stat .
-  op _par_ : Stat Stat -> Stat .
-  op protect_ : Stat -> Stat .
-
-  op begin__end : Decv Stat -> Stat .
-  op var_; : Assign -> Decv .
-  op __ : Decv Decv -> Decv [assoc id: emptyDecv] .
-
-  op DV : Decv -> QidSet .
-
-
-  var D : Decv .
-  var Q : Qid .
-  var E : Exp .
-
-  eq DV(var Q := E ; D) = Q , DV(D) .
-  eq DV(emptyDecv) = null .
-  
+  op _:=_ : Qid Exp -> Assign [ctor] .
+  op _;_ : Stat Stat -> Stat [ctor prec 100 assoc] .
+  op if_then_else_ : Cond Stat Stat -> Stat [ctor] .
+  op while_do_ : Cond Stat -> Stat [ctor] .
+  op repeat_until_ : Stat Cond -> Stat [ctor] .
+  op for_to_do_ : Assign Exp Stat -> Stat [ctor] .
+  op assert_before_ : Cond Stat -> Stat [ctor] .
+  op _or_ : Stat Stat -> Stat [ctor] .
+  op _par_ : Stat Stat -> Stat [ctor] .
+  op protect_ : Stat -> Stat [ctor] .
 
 endfm

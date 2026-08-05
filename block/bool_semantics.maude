@@ -1,0 +1,37 @@
+fmod B-SEMANTICS is
+
+  pr BOOL .
+  pr B-SYNTAX .
+  pr A-SEMANTICS .
+  pr STATE .
+
+  op B[_]_ : Cond State -> Bool .
+
+  vars S : State .
+  vars E E' : Exp .
+  vars C C' : Cond .
+
+  eq B[true] S = true .
+  eq B[false] S = false .
+
+  ceq B[E =? E'] S = true 
+    if (A[E] S) == (A[E'] S) .
+
+  eq B[E =? E'] S = false [owise] .
+
+  ceq B[E <=? E'] S = true
+    if (A[E] S) <= (A[E'] S) .
+
+  eq B[E <=? E'] S = false [owise] .
+
+  ceq B[! C] S = true 
+    if B[C] S == false .
+
+  eq B[! C] S = false [owise] .
+
+  ceq B[C &&? C'] S = true
+    if (B[C] S == true) and (B[C'] S == true) .
+
+  eq B[C &&? C'] S = false [owise] .
+
+endfm

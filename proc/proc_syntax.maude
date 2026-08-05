@@ -1,0 +1,37 @@
+fmod PROC-SYNTAX is
+
+  pr A-SYNTAX .
+  pr B-SYNTAX .
+
+  sort Stat Assign Decv Decp Pname .
+  subsort Assign < Stat .
+  subsort Qid < Pname .
+
+  op abort : -> Stat [ctor] .
+  op skip : -> Stat [ctor] .
+  op emptyDecv : -> Decv [ctor] .
+  op emptyDecp : -> Decp [ctor] .
+  op _:=_ : Qid Exp -> Assign [ctor] .
+  op _;_ : Stat Stat -> Stat [ctor prec 100 assoc] .
+  op if_then_else_ : Cond Stat Stat -> Stat [ctor] .
+  op while_do_ : Cond Stat -> Stat [ctor] .
+  op repeat_until_ : Stat Cond -> Stat [ctor] .
+  op for_to_do_ : Assign Exp Stat -> Stat [ctor] .
+  op assert_before_ : Cond Stat -> Stat [ctor] .
+  op _or_ : Stat Stat -> Stat [ctor] .
+
+  ***op _par_ : Stat Stat -> Stat .
+  ***op protect_ : Stat -> Stat .
+
+  op begin___end : Decv Decp Stat -> Stat [ctor] .
+  op var_; : Assign -> Decv [ctor] .
+  op __ : Decv Decv -> Decv [ctor assoc id: emptyDecv] .
+  op call_ : Pname -> Stat [ctor] .
+  op proc_is_; : Pname Stat -> Decp [ctor] .
+  op __ : Decp Decp -> Decp [ctor assoc id: emptyDecp] .
+
+  var D : Decv .
+  var Q : Qid .
+  var E : Exp .  
+
+endfm

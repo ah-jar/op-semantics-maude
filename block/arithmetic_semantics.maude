@@ -1,5 +1,4 @@
 fmod A-SEMANTICS is
-
   pr QID .
   pr INT .
   pr STATE .

@@ -1,0 +1,9 @@
+fmod EXP is
+
+  pr QID .
+  pr INT .
+
+  sort Exp .
+  subsorts Int Qid < Exp .
+
+endfm

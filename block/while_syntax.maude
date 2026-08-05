@@ -4,14 +4,12 @@ fmod WHILE-SYNTAX is
   pr B-SYNTAX .
   pr STATE .
 
-  sort Stat Assign Decv Decp Pname .
+  sort Stat Assign Decv .
   subsort Assign < Stat .
-  subsort Qid < Pname .
 
   op abort : -> Stat [ctor] .
   op skip : -> Stat [ctor] .
   op emptyDecv : -> Decv [ctor] .
-  op emptyDecp : -> Decp [ctor] .
   op _:=_ : Qid Exp -> Assign .
   op _;_ : Stat Stat -> Stat [prec 100 assoc] .
   op if_then_else_ : Cond Stat Stat -> Stat .
@@ -23,12 +21,9 @@ fmod WHILE-SYNTAX is
   op _par_ : Stat Stat -> Stat .
   op protect_ : Stat -> Stat .
 
-  op begin___end : Decv Decp Stat -> Stat .
+  op begin__end : Decv Stat -> Stat .
   op var_; : Assign -> Decv .
   op __ : Decv Decv -> Decv [assoc id: emptyDecv] .
-  op call_ : Pname -> Stat .
-  op proc_is_; : Pname Stat -> Decp .
-  op __ : Decp Decp -> Decp [assoc id: emptyDecp] .
 
   op DV : Decv -> QidSet .
 

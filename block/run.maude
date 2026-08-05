@@ -1,0 +1,10 @@
+rew in NS-WHILE-SEMANTICS : 
+  ***< 'z := 0 ; while 'y <=? 'x do ('z := 'z ++ 1 ; 'x := 'x -- 'y) , ['x := 17] ['y := 5] > .
+  ***< 'x := 0 ; 'y := 2 , empty > .
+  ***< if false then 'x := 5 else skip , empty > .
+  ***< while 'x <=? 3 do 'x := 'x ++ 1 , ['x := 0] > .
+  ***< 'x := 'x ++ 1 , ['x := 1] > .
+  ***B['x <=? 3] ['x := 4] .
+  ***< 'y := 1 ; while ! ('x =? 1) do ('y := 'y ** 'x ; 'x := 'x -- 1) , ['x := 12] > .
+  < 'x := 0 ; 'y := 1 ; 'z := 0 ; while 'z <=? 10 do ('res := 'x ++ 'y ; 'x := 'y ; 'y := 'res ; 'z := 'z ++ 1) , ['res := 0] > . 
+

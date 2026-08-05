@@ -1,5 +1,6 @@
 fmod A-SYNTAX is
 
+  pr STATE .
   pr QID .
   pr INT .
 
@@ -11,3 +12,5 @@ fmod A-SYNTAX is
   op _--_ : Exp Exp -> Exp [prec 30] .
 
 endfm
+
+

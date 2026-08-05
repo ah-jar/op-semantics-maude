@@ -3,35 +3,37 @@ fmod B-SEMANTICS is
   pr BOOL .
   pr B-SYNTAX .
   pr A-SEMANTICS .
-  pr STATE .
+  pr STORE .
+  pr ENVV .
 
-  op B[_]_ : Cond State -> Bool .
+  op B[_](_._) : Cond Store Envv -> Bool .
 
-  vars S : State .
+  vars S : Store .
+  vars V : Envv .
   vars E E' : Exp .
   vars C C' : Cond .
 
-  eq B[true] S = true .
-  eq B[false] S = false .
+  eq B[true] (S . V) = true .
+  eq B[false] (S . V) = false .
 
-  ceq B[E =? E'] S = true 
-    if (A[E] S) == (A[E'] S) .
+  ceq B[E =? E'] (S . V) = true 
+    if (A[E] (S . V)) == (A[E'] (S . V)) .
 
-  eq B[E =? E'] S = false [owise] .
+  eq B[E =? E'] (S . V) = false [owise] .
 
-  ceq B[E <=? E'] S = true
-    if (A[E] S) <= (A[E'] S) .
+  ceq B[E <=? E'] (S . V) = true
+    if (A[E] (S . V)) <= (A[E'] (S . V)) .
 
-  eq B[E <=? E'] S = false [owise] .
+  eq B[E <=? E'] (S . V) = false [owise] .
 
-  ceq B[! C] S = true 
-    if B[C] S == false .
+  ceq B[! C] (S . V) = true 
+    if B[C] (S . V) == false .
 
-  eq B[! C] S = false [owise] .
+  eq B[! C] (S . V) = false [owise] .
 
-  ceq B[C &&? C'] S = true
-    if (B[C] S == true) and (B[C'] S == true) .
+  ceq B[C &&? C'] (S . V) = true
+    if (B[C] (S . V) == true) and (B[C'] (S . V) == true) .
 
-  eq B[C &&? C'] S = false [owise] .
+  eq B[C &&? C'] (S . V) = false [owise] .
 
 endfm

@@ -11,6 +11,7 @@ mod NS-WHILE-SEMANTICS is
   subsort State < Config .
 
   op <_,_> : Stat State -> Config .
+  op <_,_>D : Decv State -> Config .
   op Bottom : -> State [ctor] .
 
   vars S S' S'' : Stat .
@@ -18,6 +19,7 @@ mod NS-WHILE-SEMANTICS is
   vars Q Q' : Qid .
   vars E E' : Exp .
   vars C : Cond .
+  var D : Decv .
 
   rl [assign] :
     < Q := E , M > => M [Q |-> A[E] M] .
@@ -123,5 +125,29 @@ mod NS-WHILE-SEMANTICS is
   crl [or2] :
     < S or S' , M > => M'
     if < S' , M > => M' .
+
+  *** Se eliminarán de M'' las variables locales declaradas
+  *** que no estuviesen en M
+
+  crl [block] :
+    < begin D S end , M > => M'' [DV(D) |-> M]
+    if 
+      < D , M >D => M'
+      /\ < S , M' > => M''
+      /\ M'' =/= Bottom .
+
+  crl [block-abort] :
+    < begin D S end , M > => Bottom
+    if 
+      < D , M >D => M' 
+      /\ < S , M' > => Bottom .
+
+  crl [var] :
+    < var Q := E ; D , M >D => M'
+    if 
+      < D , M [Q |-> A[E] M] >D => M' .
+
+  rl [none] :
+    < emptyDecv , M >D => M .   
 
 endm

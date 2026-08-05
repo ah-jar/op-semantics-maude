@@ -1,7 +1,7 @@
 fmod B-SYNTAX is
 
   pr BOOL .
-  pr EXP .
+  pr A-SYNTAX .
 
   sort Cond .
   subsorts Bool < Cond .
