@@ -1,0 +1,8 @@
+load loc.maude
+load store.maude
+load envv.maude
+load envp.maude
+load arithmetic_syntax.maude
+load arithmetic_semantics.maude
+***load bool_syntax.maude
+***load bool_semantics.maude

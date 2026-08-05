@@ -1,0 +1,26 @@
+fmod A-SEMANTICS is
+
+  pr QID .
+  pr INT .
+  pr STORE .
+  pr ENVV .
+  pr A-SYNTAX .
+
+  *** Composición (sto o envv)
+
+  op A[_](_._) : Exp Store Envv -> Int .
+
+  vars I : Int .
+  vars S : Store .
+  vars Q : Qid .
+  vars E E' : Exp .
+  vars V : Envv .
+
+  eq A[I] (S . V) = I .
+  eq A[Q] (S . V) = S (V Q).
+
+  eq A[E ++ E'] (S . V) = (A[E] (S . V)) + (A[E'] (S . V)) .
+  eq A[E ** E'] (S . V) = (A[E] (S . V)) * (A[E'] (S . V)) .
+  eq A[E -- E'] (S . V) = (A[E] (S . V)) - (A[E'] (S . V)) .
+
+endfm 

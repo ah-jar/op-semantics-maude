@@ -1,0 +1,14 @@
+fmod B-SYNTAX is
+
+  pr BOOL .
+  pr A-SYNTAX .
+
+  sort Cond .
+  subsorts Bool < Cond .
+
+  op _=?_ : Exp Exp -> Cond .
+  op _<=?_ : Exp Exp -> Cond .
+  op !_ : Cond -> Cond .
+  op _&&?_ : Cond Cond -> Cond .
+
+endfm

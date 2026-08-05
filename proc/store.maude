@@ -2,31 +2,35 @@ fmod STORE is
 
   pr NAT .
   pr INT .
+  pr LOC .
 
-  sort Store Loc Mem Next .
-  subsort Nat < Loc .
+  sort Store Mem Next .
 
-  op empty : -> Mem [ctor] .
-  op [_|->_] : Loc Int -> Mem [ctor] .
-  op __ : Mem Mem -> Mem [assoc comm id: empty] .
-  op [next |->_] : Nat -> Next [ctor] .
-  op __ : Mem Next -> Store .
+  op emptyMem : -> Mem [ctor] .
+  op [_:=_] : Loc Int -> Mem [ctor] .
+  op __ : Mem Mem -> Mem [ctor assoc comm id: emptyMem] .
+  op [next :=_] : Loc -> Next [ctor] .
+  op __ : Mem Next -> Store [ctor] .
   op _[_|->_] : Store Loc Int -> Store .
-  op __ : Store Next -> Store . 
 
   vars M : Mem .
   vars L : Loc .
   vars I I' : Int .
-  vars N N' : Nat .
+  vars N : Nat .
+  vars NX : Next .
 
   *** Añadir o modificar memoria
 
-  eq M [L |-> I] [next |-> N] [L |-> I'] = M [L |-> I'] [next |-> N] .
-  eq M [next |-> N] [L |-> I] = M [L |-> I] [next |-> N] [owise] .
+  eq M [L := I] NX [L |-> I'] = M [L := I'] NX .
+  eq M NX [L |-> I] = M [L := I] NX [owise] .
 
 
   *** Modificar next 
-
-  eq M [next |-> N] [next |-> N'] = M [next |-> N'] .
+  op _[next |->_] : Store Loc -> Store . 
+  eq M NX [next |-> L] = M [next := L] .
+  
+  *** Recuperar el valor de una dirección
+  op __ : Store Loc ~> Int .
+  eq M [L := I] NX L = I . 
 
 endfm

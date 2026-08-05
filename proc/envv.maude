@@ -1,0 +1,24 @@
+fmod ENVV is
+
+  pr NAT .
+  pr QID .
+  pr LOC .
+
+  sort Envv .
+
+  op emptyEnvv : -> Envv [ctor] .
+  op [_:=_] : Qid Loc -> Envv [ctor] .
+  op __ : Envv Envv -> Envv [ctor assoc comm id: emptyEnvv] .
+  op _[_|->_] : Envv Qid Loc -> Envv .
+  op __ : Envv Qid ~> Loc .
+
+  vars E : Envv .
+  vars Q : Qid .
+  vars L L' : Loc .
+  
+  eq (E [Q := L]) [Q |-> L'] = E [Q := L'] .
+  eq E [Q |-> L] = E [Q := L] [owise] .
+
+  eq E [Q := L] Q = L .
+
+endfm

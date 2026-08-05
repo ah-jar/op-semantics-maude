@@ -1,0 +1,9 @@
+fmod LOC is
+
+  pr NAT .
+
+  sort Loc .
+
+  op l : Nat -> Loc [ctor] .
+
+endfm
