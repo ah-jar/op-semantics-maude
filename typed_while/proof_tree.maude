@@ -1,0 +1,15 @@
+fmod PROOF-TREE is
+
+  pr QID .
+
+  sort Judg ProofT ProofTL .
+  subsort ProofT < ProofTL .
+
+  op nilProofTL : -> ProofTL [ctor] .
+  op _,_ : ProofTL ProofTL -> ProofTL [ctor assoc id: nilProofTL] .
+
+  op node : Qid Judg ProofTL -> ProofT [ctor frozen] .
+
+
+
+endfm

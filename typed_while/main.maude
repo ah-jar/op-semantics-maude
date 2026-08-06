@@ -1,0 +1,6 @@
+load state.maude
+load exp_syntax.maude
+load exp_semantics.maude
+load typed_while_syntax.maude
+load type_env.maude
+load semantic_static.maude

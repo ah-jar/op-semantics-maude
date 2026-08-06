@@ -1,0 +1,26 @@
+fmod TYPE-ENV is
+  
+  pr QID .
+
+  sort Type TypeEnv .
+
+  ops int bool error : -> Type [ctor] .
+
+  op emptyEnv : -> TypeEnv [ctor] .
+  op errorEnv : -> TypeEnv [ctor] .
+  op [_|->_] : Qid Type -> TypeEnv [ctor] .
+  op __ : TypeEnv TypeEnv -> TypeEnv [ctor assoc comm id: emptyEnv] .
+  op _(_) : TypeEnv Qid -> Type .
+
+  vars Q : Qid .
+  vars TE : TypeEnv .
+  vars T T' : Type .
+
+  ceq TE [Q |-> T] [Q |-> T'] = errorEnv if T =/= T' .
+  eq TE [Q |-> T] [Q |-> T] = TE [Q |-> T] . 
+  ceq errorEnv TE = errorEnv if TE =/= emptyEnv .
+
+  eq TE [Q |-> T] (Q) = T .
+  eq TE (Q) = error [owise] .
+
+endfm

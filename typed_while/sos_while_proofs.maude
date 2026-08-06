@@ -1,0 +1,180 @@
+mod SOS-WHILE-PROOFS is
+
+  pr WHILE-SYNTAX .
+  pr A-SEMANTICS .
+  pr B-SEMANTICS .
+  pr PROOF-TREE .
+
+  sort Result .
+  subsort Config ProofT < Result .
+
+  sort Config .
+  subsort State < Config .
+
+  op <_,_> : Stat State -> Config .
+  op Bottom : -> State [ctor] .
+  op _==>_ : Config Config -> Judg [ctor frozen] .
+
+  vars M M' M'' : State .
+  vars Q : Qid .
+  vars E E' : Exp .
+  vars S S' S1 S1' S2 S2' : Stat .
+  vars T T' : ProofT .
+  vars C : Cond .
+  vars TL : ProofTL .
+
+  op finalState : ProofT -> State .
+  op finalStat : ProofT -> Stat .
+  op isTerminal : ProofT -> Bool .
+  op isAbort : ProofT -> Bool .
+
+  eq finalState(node(Q, < S , M > ==> < S' , M' >, TL)) = M' .
+  eq finalState(node(Q, < S , M > ==> M', TL)) = M' .
+
+  eq finalStat(node(Q, < S , M > ==> < S' , M' >, TL)) = S' .
+
+  eq isTerminal(node(Q, < S , M > ==> M', TL)) = true .
+  eq isTerminal(T) = false [owise] .
+
+  eq isAbort(node('abortsos, < S , M > ==> M', TL)) = true .
+  eq isAbort(node('compabortsos, < S , M > ==> M', TL)) = true .
+  eq isAbort(T) = false [owise] .
+
+  rl [assign] :
+    < Q := E , M > => 
+    node('asssos, < Q := E , M > ==> M [Q |-> A[E] M], nilProofTL) .
+
+  rl [skip] :
+    < skip , M > => 
+    node('skipsos, < skip , M > ==> M, nilProofTL) .
+
+  crl [comp1] :
+    < (S1 ; S2) , M > => 
+    node('comp1sos, < (S1 ; S2) , M > ==> < (S1' ; S2) , M' >, T)
+    if
+        < S1 , M > => T
+        /\ isTerminal(T) = false
+        /\ isAbort(T) = false
+        /\ M' := finalState(T)
+        /\ S1' := finalStat(T) .
+
+  crl [comp2] :
+    < (S1 ; S2) , M > => 
+    node('comp2sos, < (S1 ; S2) , M > ==> < S2 , M' >, T)
+    if
+        < S1 , M > => T
+        /\ isTerminal(T) = true
+        /\ isAbort(T) = false
+        /\ M' := finalState(T) .
+
+  crl [comp-abort] :
+    < (S1 ; S2) , M > => 
+    node('compabortsos, < (S1 ; S2) , M > ==> Bottom, T)
+    if
+        < S1 , M > => T
+        /\ isAbort(T) = true .
+
+  crl [iftt] :
+    < if C then S1 else S2 , M > =>
+    node('ifttsos, < if C then S1 else S2 , M > ==> < S1 , M >, nilProofTL)
+    if B[C] M = true .
+
+  crl [ifff] :
+    < if C then S1 else S2 , M > =>
+    node('ifffsos, < if C then S1 else S2 , M > ==> < S2 , M >, nilProofTL)
+    if B[C] M = false .
+
+  rl [while] :
+    < while C do S , M > =>
+    node('whilesos, < while C do S , M > ==> < if C then (S ; while C do S) else skip , M >, nilProofTL) .
+
+  rl [repeat] :
+    < repeat S until C , M > =>
+    node('repeatsos, < repeat S until C , M > ==> < (S ; if C then skip else (repeat S until C)) , M >, nilProofTL) .
+
+  rl [for] :
+    < for Q := E to E' do S , M > =>
+    node('forsos, < for Q := E to E' do S , M > ==> < if E <=? E' then (Q := E ; S ; (for Q := Q ++ 1 to E' do S)) else skip , M >, nilProofTL) .
+
+  rl [abort] :
+    < abort , M > => 
+    node('abortsos, < abort , M > ==> Bottom, nilProofTL) .
+
+  rl [assert] :
+    < assert C before S , M > =>
+    node('assertsos, < assert C before S , M > ==> < if C then S else abort , M >, nilProofTL) .
+
+  rl [or1] : 
+    < S or S' , M > => 
+    node('or1sos, < S or S' , M > ==> < S , M >, nilProofTL) .
+
+  rl [or2] : 
+    < S or S' , M > => 
+    node('or2sos, < S or S' , M > ==> < S' , M >, nilProofTL) .
+
+  crl [par1] : 
+    < S1 par S2 , M > => 
+    node('par1sos, < S1 par S2 , M > ==> < S1' par S2 , M' >, T)
+    if 
+      < S1 , M > => T 
+      /\ isTerminal(T) = false
+      /\ M' := finalState(T)
+      /\ S1' := finalStat(T) .
+
+  crl [par2] :
+    < S1 par S2 , M > => 
+    node('par2sos, < S1 par S2 , M > ==> < S2 , M' >, T)
+    if 
+      < S1 , M > => T 
+      /\ M' := finalState(T) 
+      /\ isTerminal(T) = true .
+
+  crl [par3] : 
+    < S1 par S2 , M > => 
+    node('par3sos, < S1 par S2 , M > ==> < S1 par S2' , M' >, T)
+    if 
+      < S2 , M > => T 
+      /\ isTerminal(T) = false
+      /\ M' := finalState(T)
+      /\ S2' := finalStat(T) .
+
+  crl [par4] :
+    < S1 par S2 , M > => 
+    node('par4sos, < S1 par S2 , M > ==> < S1 , M' >, T)
+    if 
+      < S2 , M > => T 
+      /\ M' := finalState(T) 
+      /\ isTerminal(T) = true .
+
+  crl [protect] : 
+    < protect S , M > => 
+    node('protectsos, < protect S , M > ==> M', T)
+    if 
+      run(< S , M >) => T 
+      /\ isTerminal(T) = true
+      /\ M' := finalState(T) .
+
+  *** CIERRE TRANSITIVO
+
+  op seqsos : ProofT ProofT -> ProofT .
+  op run : Config -> ProofT .
+
+  eq finalState(seqsos(T, T')) = finalState(T') .
+  eq isTerminal(seqsos(T, T')) = isTerminal(T') .
+
+  crl [run-step] :
+    run(< S1 , M >) => seqsos(T, run(< S1' , M' >))
+    if
+      < S1 , M > => T
+      /\ isTerminal(T) = false
+      /\ S1' := finalStat(T)
+      /\ M' := finalState(T) .
+
+  crl [run-end] :
+    run(< S1 , M >) => T
+    if
+      M =/= Bottom
+      /\ < S1 , M > => T
+      /\ isTerminal(T) = true .
+
+endm

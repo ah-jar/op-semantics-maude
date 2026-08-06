@@ -1,0 +1,186 @@
+mod NS-WHILE-PROOFS is
+
+  pr WHILE-SYNTAX .
+  pr A-SEMANTICS .
+  pr B-SEMANTICS .
+  pr PROOF-TREE .
+
+  sort Result .
+  subsort Config ProofT < Result .
+
+  sort Config .
+  subsort State < Config .
+
+  op <_,_> : Stat State -> Config .
+  op Bottom : -> State [ctor] .
+  op <_,_> -->_ : Stat State State -> Judg [ctor] . 
+
+  vars M M' M'' M''' : State .
+  vars Q : Qid .
+  vars E E' : Exp .
+  vars S S' : Stat .
+  vars T T' T'' : ProofT .
+  vars C : Cond .
+  vars TL : ProofTL .
+
+  op finalState : ProofT -> State .
+  eq finalState(node(Q, < S , M > --> M', TL )) = M' . 
+  
+  rl [assign] :
+    < Q := E , M > => 
+    node('assignns, < Q := E , M > --> M [Q |-> A[E] M], nilProofTL) .
+
+  rl [skip] :
+    < skip , M > => 
+    node('skipns, < skip , M > --> M, nilProofTL) .
+
+  rl [abort] :
+    < abort , M > => 
+    node('abortns, < abort , M > --> Bottom, nilProofTL) .
+
+  crl [comp] :
+    < (S ; S') , M > => 
+    node('compns, < (S ; S') , M > --> M'', (T , T'))
+        if
+            < S , M > => T
+            /\ M' := finalState(T)
+            /\ M' =/= Bottom
+            /\ < S' , M' > => T'
+            /\ M'' := finalState(T') .
+
+  crl [comp-abort] :
+     < (S ; S') , M > => 
+     node('compabortns, < (S ; S') , M > --> M', T)
+        if
+            < S , M > => T
+            /\ M' := finalState(T)
+            /\ M' = Bottom .
+
+  crl [if-tt] :
+    < if C then S else S' , M > =>
+    node('ifttns, < if C then S else S' , M > --> M', T)
+        if
+            B[C] M = true
+            /\ < S , M > => T
+            /\ M' := finalState(T) .
+
+  crl [if-ff] :
+    < if C then S else S' , M > =>
+    node('ifffns, < if C then S else S' , M > --> M', T)
+        if
+            B[C] M = false
+            /\ < S' , M > => T
+            /\ M' := finalState(T) .
+
+  crl [while-tt] :
+    < while C do S , M > =>
+    node('whilettns, < while C do S , M > --> M'', (T , T'))
+        if
+            B[C] M = true
+            /\ < S , M > => T
+            /\ M' := finalState(T)
+            /\ M' =/= Bottom
+            /\ < while C do S , M' > => T'
+            /\ M'' := finalState(T') .
+
+  crl [while-abort] :
+    < while C do S , M > =>
+    node('whileabortns, < while C do S , M > --> M', T)
+        if
+            B[C] M = true
+            /\ < S , M > => T
+            /\ M' := finalState(T)
+            /\ M' = Bottom .
+
+  crl [while-ff] :
+    < while C do S , M > =>
+    node('whileffns, < while C do S , M > --> M, nilProofTL)
+        if B[C] M = false .
+
+  crl [repeat-ff] :
+    < repeat S until C , M > =>
+    node('repeatffns, < repeat S until C , M > --> M'', (T , T'))
+    if
+      < S , M > => T
+      /\ M' := finalState(T)
+      /\ M' =/= Bottom
+      /\ B[C] M' = false
+      /\ < repeat S until C , M' > => T'
+      /\ M'' := finalState(T') .
+
+  crl [repeat-tt] :
+    < repeat S until C , M > =>
+    node('repeatttns, < repeat S until C , M > --> M', T)
+    if
+      < S , M > => T
+      /\ M' := finalState(T)
+      /\ M' =/= Bottom
+      /\ B[C] M' = true .
+
+  crl [repeat-abort] :
+    < repeat S until C , M > =>
+    node('repeatabortns, < repeat S until C , M > --> M', T)
+    if
+      < S , M > => T
+      /\ M' := finalState(T)
+      /\ M' = Bottom .
+
+  crl [for-tt] :
+    < for Q := E to E' do S , M > =>
+    node('forttns, < for Q := E to E' do S , M > --> M''', (T , T' , T''))
+    if
+      B[E <=? E'] M = true
+      /\ < Q := E , M > => T
+      /\ M' := finalState(T)
+      /\ M' =/= Bottom
+      /\ < S , M' > => T'
+      /\ M'' := finalState(T')
+      /\ M'' =/= Bottom
+      /\ < for Q := Q ++ 1 to E' do S , M'' > => T''
+      /\ M''' := finalState(T'') .
+
+  crl [for-ff] :
+    < for Q := E to E' do S , M > =>
+    node('forffns, < for Q := E to E' do S , M > --> M, nilProofTL)
+    if
+      B[E <=? E'] M = false .
+
+  crl [for-abort] :
+    < for Q := E to E' do S , M > =>
+    node('forabortns, < for Q := E to E' do S , M > --> M'', (T , T'))
+    if
+      B[E <=? E'] M = true
+      /\ < Q := E , M > => T
+      /\ M' := finalState(T)
+      /\ < S , M' > => T'
+      /\ M'' := finalState(T')
+      /\ M'' = Bottom .
+
+  crl [assert-tt] :
+    < assert C before S , M > =>
+    node('assertttns, < assert C before S , M > --> M', T)
+    if
+        B[C] M = true
+        /\ < S , M > => T
+        /\ M' := finalState(T) .
+
+  crl [assert-ff] :
+    < assert C before S , M > =>
+    node('assertffns, < assert C before S , M > --> Bottom, nilProofTL)
+    if B[C] M = false .
+
+  crl [or1] : 
+    < S or S' , M > =>
+    node('or1ns, < S or S' , M > --> M', T)
+    if 
+      < S , M > => T 
+      /\ M' := finalState(T) .
+
+  crl [or2] : 
+    < S or S' , M > =>
+    node('or2ns, < S or S' , M > --> M', T)
+    if 
+      < S' , M > => T 
+      /\ M' := finalState(T) .
+
+endm

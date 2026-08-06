@@ -1,0 +1,98 @@
+mod SOS-WHILE-SEMANTICS is
+
+    pr STATE .
+    pr WHILE-SYNTAX .
+    pr A-SYNTAX .
+    pr A-SEMANTICS .
+    pr B-SYNTAX .
+    pr B-SEMANTICS .
+
+    sort Config .
+    subsort State < Config .
+
+    op <_,_> : Stat State -> Config .
+    op Bottom : -> State [ctor] .
+
+    vars S S' S1 S1' S2 S2' : Stat .
+    vars M M' M'' : State .
+    vars Q : Qid .
+    vars E E' : Exp .
+    vars C : Cond .
+
+    rl [assign] :
+        < Q := E , M > => M [Q |-> A[E] M] .
+
+    rl [skip] :
+        < skip , M > => M .
+
+    crl [comp1] :
+        < (S1 ; S2) , M > => < (S1' ; S2) , M' >
+        if
+            < S1 , M > => < S1' , M' >
+            /\ M' =/= Bottom
+            /\ < S1 , M > =/= < S1' , M' > .
+
+    crl [comp2] :
+        < (S1 ; S2) , M > => < S2 , M' >
+        if < S1 , M > => M'
+        /\ M' =/= Bottom .
+
+    crl [comp-abort] :
+        < (S1 ; S2) , M > => Bottom
+        if < S1 , M > => Bottom .
+
+    crl [iftt] :
+        < if C then S1 else S2 , M > => < S1 , M >
+            if B[C] M = true .
+
+    crl [ifff] :
+        < if C then S1 else S2 , M > => < S2 , M >
+            if B[C] M = false .
+
+    rl [while] :
+        < while C do S , M > =>
+        < if C then (S ; while C do S) else skip , M > .
+
+    rl [repeat] :
+      < repeat S until C , M > =>
+      < (S ; if C then skip else (repeat S until C)) , M > .
+
+    rl [for] :
+      < for Q := E to E' do S , M > =>
+      < if E <=? E' then (Q := E ; S ;
+      for Q := Q ++ 1 to E' do S) else skip , M > .
+
+    rl [abort] :
+        < abort , M > => Bottom .
+
+    rl [assert] :
+        < assert C before S , M > =>
+        < if C then S else abort , M > .
+
+    rl [or1] : 
+      < S or S' , M > => < S , M > .
+
+    rl [or2] :
+      < S or S' , M > => < S' , M > .
+
+    crl [par1] : 
+      < S1 par S2 , M > => < S1' par S2 , M' >
+      if < S1 , M > => < S1' , M' > .
+
+    crl [par2] :
+      < S1 par S2 , M > => < S2 , M' > 
+      if < S1 , M > => M' .
+
+    crl [par3] : 
+      < S1 par S2 , M > => < S1 par S2' , M' >
+      if < S2 , M > => < S2' , M' > .
+
+    crl [par4] : 
+      < S1 par S2 , M > => < S1 , M' > 
+      if < S2 , M > => M' .
+
+    crl [protect] :
+      < protect S , M > => M'
+      if < S , M > => M' .
+
+endm

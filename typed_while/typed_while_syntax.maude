@@ -1,0 +1,25 @@
+fmod TYPED-WHILE-SYNTAX is
+
+  pr QID .
+  pr INT .
+  pr EXP-SYNTAX .
+
+  sort Stat .
+  ***subsort Exp < Stat .
+
+  op abort : -> Stat [ctor] .
+  op skip : -> Stat [ctor] .
+  op int_:=_ : Qid Exp -> Stat [ctor] .
+  op bool_:=_ : Qid Exp -> Stat [ctor] .
+  op _:=_ : Qid Exp -> Stat [ctor] .
+  op _;_ : Stat Stat -> Stat [ctor prec 100 assoc] .
+  op if_then_else_ : Exp Stat Stat -> Stat [ctor] .
+  op while_do_ : Exp Stat -> Stat [ctor] .
+  op repeat_until_ : Stat Exp -> Stat [ctor] .
+  op for_to_do_ : Exp Exp Stat -> Stat [ctor] .
+  op assert_before_ : Exp Stat -> Stat [ctor] .
+  op _or_ : Stat Stat -> Stat [ctor] .
+  op _par_ : Stat Stat -> Stat [ctor] .
+  op protect_ : Stat -> Stat [ctor] .
+
+endfm

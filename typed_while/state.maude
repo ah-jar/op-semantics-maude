@@ -1,0 +1,23 @@
+fmod STATE is
+
+  pr QID .
+  pr INT .
+
+  sort State .
+
+  op empty : -> State [ctor] .
+  op [_:=_] : Qid Int -> State [ctor] .
+  op __ : State State -> State [assoc comm id: empty] .
+  op __ : State Qid ~> Int .
+  op _[_|->_] : State Qid Int -> State .
+
+  vars S S' : State .
+  vars Q : Qid .
+  vars I I' : Int .
+
+  eq ([Q := I] S) Q = I .
+  eq ([Q := I] S) [Q |-> I'] = [Q := I'] S .
+  eq S [Q |-> I] = S [Q := I] [owise] .
+
+endfm
+

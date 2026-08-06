@@ -1,0 +1,20 @@
+fmod EXP-SYNTAX is
+  
+  pr QID .
+  pr INT .
+
+  sort Exp .
+  subsorts Int Qid < Exp .
+
+  ops true false : -> Exp [ctor] .
+
+  op _++_ : Exp Exp -> Exp .
+  op _**_ : Exp Exp -> Exp .
+  op _--_ : Exp Exp -> Exp .
+
+  op _=?_ : Exp Exp -> Exp .
+  op _<=?_ : Exp Exp -> Exp .
+  op !_ : Exp -> Exp .
+  op _&&?_ : Exp Exp -> Exp .
+
+endfm

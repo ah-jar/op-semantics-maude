@@ -1,0 +1,49 @@
+fmod EXP-SEMANTICS is
+  
+  pr EXP-SYNTAX .
+  pr STATE .
+
+  sort Val .
+  subsorts Int < Val .
+
+  op Ex[_]_ : Exp State -> Val .
+
+  vars I : Int .
+  vars S : State .
+  vars Q : Qid .
+  vars E E' : Exp .
+
+  *** ARITMÉTICAS
+
+  eq Ex[I] S = I .
+  eq Ex[Q] S = S Q .
+  eq Ex[E ++ E'] S = (Ex[E] S) + (Ex[E'] S) .
+  eq Ex[E ** E'] S = (Ex[E] S) * (Ex[E'] S) .
+  eq Ex[E -- E'] S = (Ex[E] S) - (Ex[E'] S) .
+
+  *** BOOLEANAS
+
+  eq Ex[true] S = true .
+  eq Ex[false] S = false .
+
+  ceq Ex[E =? E'] S = true 
+    if (Ex[E] S) == (Ex[E'] S) .
+
+  eq Ex[E =? E'] S = false [owise] .
+
+  ceq Ex[E <=? E'] S = true
+    if (Ex[E] S) <= (Ex[E'] S) .
+
+  eq Ex[E <=? E'] S = false [owise] .
+
+  ceq Ex[! E] S = true 
+    if Ex[E] S == false .
+
+  eq Ex[! E] S = false [owise] .
+
+  ceq Ex[E &&? E'] S = true
+    if (Ex[E] S == true) and (Ex[E'] S == true) .
+
+  eq Ex[E &&? E'] S = false [owise] .
+
+endfm
