@@ -4,15 +4,11 @@ fmod SEMANTIC-STATIC is
   pr TYPE-ENV .
   pr TYPED-WHILE-SYNTAX .
 
-  sort StatType .
-
-  op ok : -> StatType [ctor] .
-  op statError : -> StatType [ctor] .
-
   op _|-_ : TypeEnv Exp -> Type .
   op _|-_ : TypeEnv Stat -> StatType .
 
   vars TE : TypeEnv .
+  vars T : Type .
   vars I : Int .
   vars Q : Qid .
   vars E E' : Exp .
@@ -25,5 +21,13 @@ fmod SEMANTIC-STATIC is
   eq TE |- (E ++ E') =
     if TE |- E == int and TE |- E' == int 
     then int else error fi .
+
+
+  eq TE |- abort = ok .
+  eq TE |- skip = ok .
+
+  eq TE |- (T Q := E) = 
+    if TE [Q |-> T] =/= errorEnv and TE |- E == T 
+    then ok else statError fi .
 
 endfm

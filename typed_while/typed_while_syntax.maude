@@ -3,14 +3,13 @@ fmod TYPED-WHILE-SYNTAX is
   pr QID .
   pr INT .
   pr EXP-SYNTAX .
+  pr TYPE-ENV .
 
   sort Stat .
-  ***subsort Exp < Stat .
 
   op abort : -> Stat [ctor] .
   op skip : -> Stat [ctor] .
-  op int_:=_ : Qid Exp -> Stat [ctor] .
-  op bool_:=_ : Qid Exp -> Stat [ctor] .
+  op __:=_ : BasicType Qid Exp -> Stat [ctor] .
   op _:=_ : Qid Exp -> Stat [ctor] .
   op _;_ : Stat Stat -> Stat [ctor prec 100 assoc] .
   op if_then_else_ : Exp Stat Stat -> Stat [ctor] .

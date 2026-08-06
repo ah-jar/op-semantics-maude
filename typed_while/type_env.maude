@@ -2,9 +2,14 @@ fmod TYPE-ENV is
   
   pr QID .
 
-  sort Type TypeEnv .
+  sort Type BasicType TypeEnv StatType .
+  subsort BasicType StatType < Type .
 
-  ops int bool error : -> Type [ctor] .
+  op ok : -> StatType [ctor] .
+  op statError : -> StatType [ctor] .
+
+  ops int bool : -> BasicType [ctor] .
+  op error : -> Type [ctor] .
 
   op emptyEnv : -> TypeEnv [ctor] .
   op errorEnv : -> TypeEnv [ctor] .
@@ -16,8 +21,7 @@ fmod TYPE-ENV is
   vars TE : TypeEnv .
   vars T T' : Type .
 
-  ceq TE [Q |-> T] [Q |-> T'] = errorEnv if T =/= T' .
-  eq TE [Q |-> T] [Q |-> T] = TE [Q |-> T] . 
+  eq TE [Q |-> T] [Q |-> T'] = errorEnv . 
   ceq errorEnv TE = errorEnv if TE =/= emptyEnv .
 
   eq TE [Q |-> T] (Q) = T .
