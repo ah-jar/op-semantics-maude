@@ -1,125 +1,56 @@
 mod SOS-WHILE-PROOFS is
 
-  pr STATE .
   pr WHILE-SYNTAX .
-  pr A-SYNTAX .
   pr A-SEMANTICS .
-  pr B-SYNTAX .
   pr B-SEMANTICS .
+  pr PROOF-TREE .
 
-  sort Tree Config Result .
-  subsort Config Tree < Result .
+  sort Result .
+  subsort Config ProofT < Result .
+
+  sort Config .
+  subsort State < Config .
 
   op <_,_> : Stat State -> Config .
-  op <_,_>D : Decv State -> Config .
   op Bottom : -> State [ctor] .
-
-  op skipsos : Stat State State -> Tree .
-  op asssos : Stat State State -> Tree .
-  op comp1sos : Stat State Tree Stat State -> Tree .
-  op comp2sos : Stat State Tree Stat State -> Tree .
-  op ifttsos : Stat State Stat State -> Tree .
-  op ifffsos : Stat State Stat State -> Tree .
-  op whilesos : Stat State Stat State -> Tree .
-  op repeatsos : Stat State Stat State -> Tree .
-  op forsos : Stat State Stat State -> Tree .
-  op abortsos : Stat State State -> Tree .
-  op compabortsos : Stat State Tree State -> Tree .
-  op assertsos : Stat State Stat State -> Tree .
-  op or1sos : Stat State Stat State -> Tree .
-  op or2sos : Stat State Stat State -> Tree .
-  op par1sos : Stat State Tree Stat State -> Tree .
-  op par2sos : Stat State Tree Stat State -> Tree .
-  op par3sos : Stat State Tree Stat State -> Tree .
-  op par4sos : Stat State Tree Stat State -> Tree .
-  op protectsos : Stat State Tree State -> Tree .
-  op beginblocksos : Stat State Tree Stat State -> Tree .
-  op varsos : Decv State Decv State -> Tree .
-  op nonesos : Decv State State -> Tree .
-  op endblocksos : Stat State State -> Tree . 
-
-
-  op finalState : Tree -> State .
-  op finalStat : Tree -> Stat .
-  op isTerminal : Tree -> Bool .
-  op restore : State Decv -> Stat .
-  op finalDecv : Tree -> Decv .
+  op _==>_ : Config Config -> Judg [ctor frozen] .
 
   vars M M' M'' : State .
   vars Q : Qid .
   vars E E' : Exp .
   vars S S' S1 S1' S2 S2' : Stat .
-  vars T T' : Tree .
+  vars T T' : ProofT .
   vars C : Cond .
-  var D D' : Decv .
+  vars TL : ProofTL .
 
-  eq isTerminal(asssos(S, M, M')) = true .
-  eq isTerminal(skipsos(S, M, M')) = true .
-  eq isTerminal(abortsos(S, M, M')) = true .
-  eq isTerminal(compabortsos(S, M, T, M')) = true .
-  eq isTerminal(protectsos(S, M, T, M')) = true .
-  eq isTerminal(seqsos(T, T')) = isTerminal(T') .
-  eq isTerminal(nonesos(D, M, M')) = true .
-  eq isTerminal(endblocksos(S, M, M')) = true .
+  op finalState : ProofT -> State .
+  op finalStat : ProofT -> Stat .
+  op isTerminal : ProofT -> Bool .
+  op isAbort : ProofT -> Bool .
+
+  eq finalState(node(Q, < S , M > ==> < S' , M' >, TL)) = M' .
+  eq finalState(node(Q, < S , M > ==> M', TL)) = M' .
+
+  eq finalStat(node(Q, < S , M > ==> < S' , M' >, TL)) = S' .
+
+  eq isTerminal(node(Q, < S , M > ==> M', TL)) = true .
   eq isTerminal(T) = false [owise] .
 
-  eq finalStat(comp1sos(S, M, T, S', M')) = S' .
-  eq finalStat(comp2sos(S, M, T, S', M')) = S' .
-  eq finalStat(ifttsos(S, M, S', M')) = S' .
-  eq finalStat(ifffsos(S, M, S', M')) = S' .
-  eq finalStat(whilesos(S, M, S', M')) = S' .
-  eq finalStat(repeatsos(S, M, S', M')) = S' .
-  eq finalStat(forsos(S, M, S', M')) = S' .
-  eq finalStat(assertsos(S, M, S', M')) = S' .
-  eq finalStat(or1sos(S, M, S', M')) = S' .
-  eq finalStat(or2sos(S, M, S', M')) = S' .
-  eq finalStat(par1sos(S, M, T, S', M')) = S' .
-  eq finalStat(par2sos(S, M, T, S', M')) = S' .
-  eq finalStat(par3sos(S, M, T, S', M')) = S' .
-  eq finalStat(par4sos(S, M, T, S', M')) = S' .
-  eq finalStat(beginblocksos(S, M, T, S', M')) = S' .
-
-  eq finalDecv(varsos(D, M, D', M')) = D' .
-
-
-  eq finalState(asssos(S, M, M')) = M' .
-  eq finalState(skipsos(S, M, M')) = M' .
-  eq finalState(comp1sos(S, M, T, S', M')) = M' .
-  eq finalState(comp2sos(S, M, T, S', M')) = M' .
-  eq finalState(ifttsos(S, M, S', M')) = M' .
-  eq finalState(ifffsos(S, M, S', M')) = M' .
-  eq finalState(whilesos(S, M, S', M')) = M' .
-  eq finalState(repeatsos(S, M, S', M')) = M' .
-  eq finalState(forsos(S, M, S', M')) = M' .
-  eq finalState(abortsos(S, M, M')) = M' .
-  eq finalState(compabortsos(S, M, T, M')) = M' .
-  eq finalState(assertsos(S, M, S', M')) = M' .
-  eq finalState(or1sos(S, M, S', M')) = M' .
-  eq finalState(or2sos(S, M, S', M')) = M' .
-  eq finalState(par1sos(S, M, T, S', M')) = M' .
-  eq finalState(par2sos(S, M, T, S', M')) = M' .
-  eq finalState(par3sos(S, M, T, S', M')) = M' .
-  eq finalState(par4sos(S, M, T, S', M')) = M' .
-  eq finalState(protectsos(S, M, T, M')) = M' .
-  eq finalState(beginblocksos(S, M, T, S', M')) = M' .
-  eq finalState(varsos(D, M, D', M')) = M' .
-  eq finalState(nonesos(D, M, M')) = M' .
-  eq finalState(endblocksos(S, M, M')) = M' .
-
-
-  op isAbort : Tree -> Bool .
-  eq isAbort(abortsos(S, M, M')) = true .
-  eq isAbort(compabortsos(S, M, T, M')) = true .
+  eq isAbort(node('abortsos, < S , M > ==> M', TL)) = true .
+  eq isAbort(node('compabortsos, < S , M > ==> M', TL)) = true .
   eq isAbort(T) = false [owise] .
 
   rl [assign] :
-    < Q := E , M > => asssos(Q := E, M, M [Q |-> A[E] M]) .
+    < Q := E , M > => 
+    node('asssos, < Q := E , M > ==> M [Q |-> A[E] M], nilProofTL) .
 
   rl [skip] :
-    < skip , M > => skipsos(skip, M, M) .
+    < skip , M > => 
+    node('skipsos, < skip , M > ==> M, nilProofTL) .
 
   crl [comp1] :
-    < (S1 ; S2) , M > => comp1sos((S1 ; S2), M, T, (S1' ; S2), M')
+    < (S1 ; S2) , M > => 
+    node('comp1sos, < (S1 ; S2) , M > ==> < (S1' ; S2) , M' >, T)
     if
         < S1 , M > => T
         /\ isTerminal(T) = false
@@ -128,7 +59,8 @@ mod SOS-WHILE-PROOFS is
         /\ S1' := finalStat(T) .
 
   crl [comp2] :
-    < (S1 ; S2) , M > => comp2sos((S1 ; S2), M, T, S2, M')
+    < (S1 ; S2) , M > => 
+    node('comp2sos, < (S1 ; S2) , M > ==> < S2 , M' >, T)
     if
         < S1 , M > => T
         /\ isTerminal(T) = true
@@ -136,53 +68,53 @@ mod SOS-WHILE-PROOFS is
         /\ M' := finalState(T) .
 
   crl [comp-abort] :
-    < (S1 ; S2) , M > => compabortsos((S1 ; S2), M, T, Bottom)
+    < (S1 ; S2) , M > => 
+    node('compabortsos, < (S1 ; S2) , M > ==> Bottom, T)
     if
         < S1 , M > => T
         /\ isAbort(T) = true .
 
   crl [iftt] :
     < if C then S1 else S2 , M > =>
-    ifttsos(if C then S1 else S2, M, S1, M)
+    node('ifttsos, < if C then S1 else S2 , M > ==> < S1 , M >, nilProofTL)
     if B[C] M = true .
 
   crl [ifff] :
     < if C then S1 else S2 , M > =>
-    ifffsos(if C then S1 else S2, M, S2, M)
+    node('ifffsos, < if C then S1 else S2 , M > ==> < S2 , M >, nilProofTL)
     if B[C] M = false .
 
   rl [while] :
     < while C do S , M > =>
-    whilesos(while C do S, M,
-      if C then (S ; while C do S) else skip, M) .
+    node('whilesos, < while C do S , M > ==> < if C then (S ; while C do S) else skip , M >, nilProofTL) .
 
   rl [repeat] :
     < repeat S until C , M > =>
-    repeatsos((repeat S until C), M,
-      (S ; if C then skip else (repeat S until C)), M) .
+    node('repeatsos, < repeat S until C , M > ==> < (S ; if C then skip else (repeat S until C)) , M >, nilProofTL) .
 
   rl [for] :
     < for Q := E to E' do S , M > =>
-      forsos((for Q := E to E' do S), M, if E <=? E' then
-      (Q := E ; S ; (for Q := Q ++ 1 to E' do S)) else skip, M) .
+    node('forsos, < for Q := E to E' do S , M > ==> < if E <=? E' then (Q := E ; S ; (for Q := Q ++ 1 to E' do S)) else skip , M >, nilProofTL) .
 
   rl [abort] :
-    < abort , M > => abortsos(abort, M, Bottom) .
+    < abort , M > => 
+    node('abortsos, < abort , M > ==> Bottom, nilProofTL) .
 
   rl [assert] :
     < assert C before S , M > =>
-    assertsos(assert C before S, M,
-    if C then S else abort , M) .
+    node('assertsos, < assert C before S , M > ==> < if C then S else abort , M >, nilProofTL) .
 
   rl [or1] : 
-    < S or S' , M > => or1sos(S or S', M, S, M) .
+    < S or S' , M > => 
+    node('or1sos, < S or S' , M > ==> < S , M >, nilProofTL) .
 
   rl [or2] : 
-    < S or S' , M > => or2sos(S or S', M, S', M) .
+    < S or S' , M > => 
+    node('or2sos, < S or S' , M > ==> < S' , M >, nilProofTL) .
 
-  ***(crl [par1] : 
+  crl [par1] : 
     < S1 par S2 , M > => 
-    par1sos(S1 par S2, M, T, S1' par S2, M')
+    node('par1sos, < S1 par S2 , M > ==> < S1' par S2 , M' >, T)
     if 
       < S1 , M > => T 
       /\ isTerminal(T) = false
@@ -191,7 +123,7 @@ mod SOS-WHILE-PROOFS is
 
   crl [par2] :
     < S1 par S2 , M > => 
-    par2sos(S1 par S2, M, T, S2, M')
+    node('par2sos, < S1 par S2 , M > ==> < S2 , M' >, T)
     if 
       < S1 , M > => T 
       /\ M' := finalState(T) 
@@ -199,7 +131,7 @@ mod SOS-WHILE-PROOFS is
 
   crl [par3] : 
     < S1 par S2 , M > => 
-    par3sos(S1 par S2, M, T, S1 par S2', M')
+    node('par3sos, < S1 par S2 , M > ==> < S1 par S2' , M' >, T)
     if 
       < S2 , M > => T 
       /\ isTerminal(T) = false
@@ -208,7 +140,7 @@ mod SOS-WHILE-PROOFS is
 
   crl [par4] :
     < S1 par S2 , M > => 
-    par4sos(S1 par S2, M, T, S1, M')
+    node('par4sos, < S1 par S2 , M > ==> < S1 , M' >, T)
     if 
       < S2 , M > => T 
       /\ M' := finalState(T) 
@@ -216,41 +148,19 @@ mod SOS-WHILE-PROOFS is
 
   crl [protect] : 
     < protect S , M > => 
-    protectsos(protect S, M, T, M')
+    node('protectsos, < protect S , M > ==> M', T)
     if 
       run(< S , M >) => T 
       /\ isTerminal(T) = true
       /\ M' := finalState(T) .
-    )
-
-  crl [begin-block] :
-    < begin D S end , M > => 
-    beginblocksos(begin D S end, M, T, (S ; restore(M, D)), M')
-    if 
-      runD(< D , M >D) => T 
-      /\ isTerminal(T) = true
-      /\ M' := finalState(T) .
-
-  rl [var] :
-    < var Q := E ; D , M >D => 
-    varsos(var Q := E ; D, M, D, M [Q |-> A[E] M]) .
-
-  rl [none] :
-    < emptyDecv , M >D => 
-    nonesos(emptyDecv, M, M) .
-
-  rl [end-block] :
-    < restore(M', D) , M > =>
-    endblocksos(restore(M', D), M, M [DV(D) |-> M']) .
-    
 
   *** CIERRE TRANSITIVO
 
-  op seqsos : Tree Tree -> Tree .
-  op run : Config -> Tree .
-  op runD : Config -> Tree .
+  op seqsos : ProofT ProofT -> ProofT .
+  op run : Config -> ProofT .
 
   eq finalState(seqsos(T, T')) = finalState(T') .
+  eq isTerminal(seqsos(T, T')) = isTerminal(T') .
 
   crl [run-step] :
     run(< S1 , M >) => seqsos(T, run(< S1' , M' >))
@@ -265,20 +175,6 @@ mod SOS-WHILE-PROOFS is
     if
       M =/= Bottom
       /\ < S1 , M > => T
-      /\ isTerminal(T) = true .
-
-  crl [runD-step] :
-    runD(< D , M >D) => seqsos(T, runD(< D' , M' >D))
-    if 
-      < D , M >D => T 
-      /\ isTerminal(T) = false 
-      /\ D' := finalDecv(T)
-      /\ M' := finalState(T) .
-
-  crl [runD-end] :
-    runD(< D , M >D) => T 
-    if 
-      < D , M >D => T 
       /\ isTerminal(T) = true .
 
 endm

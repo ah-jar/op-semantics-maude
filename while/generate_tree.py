@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 r"""
-Ejecuta Maude y genera árboles de derivación formal en estricta notación Nielson.
-Soporta Semántica Natural (NS) y Semántica Operacional de Paso Corto (SOS),
-incluyendo bloques locales (begin ... end), declaraciones (var) y restore.
+Generador automático de árboles de derivación formal para el lenguaje WHILE.
+Basado estrictamente en los módulos Maude NS-WHILE-PROOFS y SOS-WHILE-PROOFS.
+Compila el resultado en un documento PDF en notación Nielson.
 """
 
 import re
@@ -33,7 +33,7 @@ def check_ns_compatibility(program_text: str) -> None:
         sys.exit(
             "\n[Error de Semántica] Los operadores 'par' (||) y 'protect' "
             "no están soportados en Semántica Natural (NS).\n"
-            "Ejecute el script en modo SOS mediante el modificador '--sos'.\n"
+            "Ejecute el script en modo SOS mediante '-m sos' o '--sos'.\n"
         )
 
 
@@ -43,22 +43,77 @@ def has_nondeterminism(program_text: str) -> bool:
 
 
 def split_arguments(text: str) -> list[str]:
-    parts, start, depth = [], 0, 0
+    """Divide argumentos considerando la anidación de paréntesis y corchetes."""
+    text = text.strip()
+    if not text:
+        return []
+
+    while text.startswith("(") and text.endswith(")"):
+        depth = 0
+        matched_all = True
+        for i, c in enumerate(text):
+            if c in "([{<":
+                depth += 1
+            elif c in ")]}>":
+                depth -= 1
+            if depth == 0 and i < len(text) - 1:
+                matched_all = False
+                break
+        if matched_all:
+            text = text[1:-1].strip()
+        else:
+            break
+
+    parts = []
+    current = []
+    depth = 0
+
     for i, char in enumerate(text):
         if char in "([{":
             depth += 1
         elif char in ")]}":
             depth -= 1
-        elif char == "," and depth == 0:
-            parts.append(text[start:i].strip())
-            start = i + 1
-    parts.append(text[start:].strip())
+        elif char == "<":
+            depth += 1
+        elif char == ">":
+            if i > 0 and text[i - 1] in ("-", "=", "|", "?", "<"):
+                pass
+            else:
+                depth -= 1
+
+        if char == "," and depth == 0:
+            part = "".join(current).strip()
+            if part:
+                parts.append(part)
+            current = []
+        else:
+            current.append(char)
+
+    last_part = "".join(current).strip()
+    if last_part:
+        parts.append(last_part)
+
     return parts
+
+
+def parse_config(config_str: str) -> tuple[str, str]:
+    """Extrae (sentencia, estado) de una configuración < S , M >."""
+    config_str = config_str.strip()
+    if config_str.startswith("<") and config_str.endswith(">"):
+        config_str = config_str[1:-1].strip()
+    parts = split_arguments(config_str)
+    if len(parts) >= 2:
+        return parts[0], ", ".join(parts[1:])
+    elif len(parts) == 1:
+        return parts[0], "empty"
+    return config_str, "empty"
 
 
 def parse_tree(term: str, semantics: str = "ns") -> Node:
     term = re.sub(r"\s+", " ", term).strip()
+    term = re.sub(r"\s*Bye\.\s*$", "", term).strip()
 
+    # Detección de estado bloqueado (stuck)
     match_run_stuck = re.fullmatch(r"run\(\s*\(?\s*<\s*(.*?)\s*,\s*(.*?)\s*>\s*\)?\s*\)", term)
     if match_run_stuck:
         return Node("stuck", match_run_stuck.group(1).strip(), match_run_stuck.group(2).strip(), "stuck", semantics=semantics, is_stuck=True)
@@ -70,118 +125,59 @@ def parse_tree(term: str, semantics: str = "ns") -> Node:
     constructor = match.group(1)
     args = split_arguments(match.group(2))
 
-    if ("par" in constructor or "protect" in constructor) and semantics == "ns":
-        raise ValueError("Los operadores 'par' y 'protect' no están soportados en Semántica Natural (NS).")
-
+    # Cierre transitivo en SOS
     if constructor == "seqsos":
-        children = tuple(parse_tree(arg, "sos") for arg in args if arg != "nilSOS")
+        children = tuple(parse_tree(arg, "sos") for arg in args if arg and arg != "nilSOS")
         return Node("seq", "", "", "", children, semantics="sos")
 
-    # --- Reglas Semántica Natural (NS) ---
-    if constructor == "assns" and len(args) == 3:
-        return Node("ass", args[0], args[1], args[2], semantics="ns")
-    if constructor == "skipns" and len(args) == 3:
-        return Node("skip", args[0], args[1], args[2], semantics="ns")
-    if constructor == "compns" and len(args) == 5:
-        return Node("comp", args[0], args[1], args[4], (parse_tree(args[2], "ns"), parse_tree(args[3], "ns")), semantics="ns")
-    if constructor == "ifttns" and len(args) == 4:
-        return Node("if-tt", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
-    if constructor == "ifffns" and len(args) == 4:
-        return Node("if-ff", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
-    if constructor == "whilettns" and len(args) == 5:
-        return Node("while-tt", args[0], args[1], args[4], (parse_tree(args[2], "ns"), parse_tree(args[3], "ns")), semantics="ns")
-    if constructor == "whileffns" and len(args) == 3:
-        return Node("while-ff", args[0], args[1], args[2], semantics="ns")
-    if constructor == "repeatffns" and len(args) == 5:
-        return Node("repeat-ff", args[0], args[1], args[4], (parse_tree(args[2], "ns"), parse_tree(args[3], "ns")), semantics="ns")
-    if constructor == "repeatttns" and len(args) == 4:
-        return Node("repeat-tt", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
-    if constructor == "forttns" and len(args) == 6:
-        return Node("for-tt", args[0], args[1], args[5], (parse_tree(args[2], "ns"), parse_tree(args[3], "ns"), parse_tree(args[4], "ns")), semantics="ns")
-    if constructor == "forffns" and len(args) == 3:
-        return Node("for-ff", args[0], args[1], args[2], semantics="ns")
-    if constructor == "abortns" and len(args) == 3:
-        return Node("abort", args[0], args[1], args[2], semantics="ns")
-    if constructor == "compabortns" and len(args) == 4:
-        return Node("comp-abort", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
-    if constructor == "whileabortns" and len(args) == 4:
-        return Node("while-abort", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
-    if constructor == "repeatabortns" and len(args) == 4:
-        return Node("repeat-abort", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
-    if constructor == "forabortns" and len(args) == 5:
-        return Node("for-abort", args[0], args[1], args[4], (parse_tree(args[2], "ns"), parse_tree(args[3], "ns")), semantics="ns")
-    if constructor == "assertttns" and len(args) == 4:
-        return Node("assert-tt", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
-    if constructor == "assertffns" and len(args) == 3:
-        return Node("assert-ff", args[0], args[1], args[2], semantics="ns")
-    if constructor == "or1ns" and len(args) == 4:
-        return Node("or1", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
-    if constructor == "or2ns" and len(args) == 4:
-        return Node("or2", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
+    # Mapeo universal para el operador node(Qid, Judg, ProofTL)
+    if constructor == "node" and len(args) >= 2:
+        raw_qid = args[0].strip().lstrip("'")
+        
+        # Mapeo de Qid a etiquetas de reglas formateadas
+        rule_map_ns = {
+            "assignns": "ass", "skipns": "skip", "abortns": "abort", "compns": "comp",
+            "compabortns": "comp-abort", "ifttns": "if-tt", "ifffns": "if-ff",
+            "whilettns": "while-tt", "whileabortns": "while-abort", "whileffns": "while-ff",
+            "repeatffns": "repeat-ff", "repeatttns": "repeat-tt", "repeatabortns": "repeat-abort",
+            "forttns": "for-tt", "forffns": "for-ff", "forabortns": "for-abort",
+            "assertttns": "assert-tt", "assertffns": "assert-ff", "or1ns": "or1", "or2ns": "or2",
+            "blockns": "block", "varns": "var", "nonens": "none",
+        }
+        rule_map_sos = {
+            "asssos": "ass", "skipsos": "skip", "comp1sos": "comp^1", "comp2sos": "comp^2",
+            "compabortsos": "comp-abort", "ifttsos": "if-tt", "ifffsos": "if-ff",
+            "whilesos": "while", "repeatsos": "repeat", "forsos": "for", "abortsos": "abort",
+            "assertsos": "assert", "or1sos": "or1", "or2sos": "or2", "par1sos": "par^1",
+            "par2sos": "par^2", "par3sos": "par^3", "par4sos": "par^4", "protectsos": "protect",
+            "beginblocksos": "begin-block", "varsos": "var", "nonesos": "none", "endblocksos": "end-block",
+        }
 
-    # Bloques y declaraciones (NS)
-    if constructor == "blockns" and len(args) == 5:
-        return Node("block", args[0], args[1], args[4], (parse_tree(args[2], "ns"), parse_tree(args[3], "ns")), semantics="ns")
-    if constructor == "varns" and len(args) == 4:
-        return Node("var", args[0], args[1], args[3], (parse_tree(args[2], "ns"),), semantics="ns")
-    if constructor == "nonens" and len(args) == 3:
-        return Node("none", args[0], args[1], args[2], semantics="ns")
+        rule_map = rule_map_sos if semantics == "sos" else rule_map_ns
+        rule_label = rule_map.get(raw_qid, raw_qid.replace("sos", "").replace("ns", "").replace("_", "-"))
 
-    # --- Reglas Semántica SOS ---
-    if constructor == "asssos" and len(args) == 3:
-        return Node("ass", args[0], args[1], args[2], semantics="sos")
-    if constructor == "skipsos" and len(args) == 3:
-        return Node("skip", args[0], args[1], args[2], semantics="sos")
-    if constructor == "comp1sos" and len(args) == 5:
-        return Node("comp^1", args[0], args[1], args[4], (parse_tree(args[2], "sos"),), next_stat=args[3], semantics="sos")
-    if constructor == "comp2sos" and len(args) == 5:
-        return Node("comp^2", args[0], args[1], args[4], (parse_tree(args[2], "sos"),), next_stat=args[3], semantics="sos")
-    if constructor == "ifttsos" and len(args) == 4:
-        return Node("if-tt", args[0], args[1], args[3], next_stat=args[2], semantics="sos")
-    if constructor == "ifffsos" and len(args) == 4:
-        return Node("if-ff", args[0], args[1], args[3], next_stat=args[2], semantics="sos")
-    if constructor == "whilesos" and len(args) == 4:
-        return Node("while", args[0], args[1], args[3], next_stat=args[2], semantics="sos")
-    if constructor == "repeatsos" and len(args) == 4:
-        return Node("repeat", args[0], args[1], args[3], next_stat=args[2], semantics="sos")
-    if constructor == "forsos" and len(args) == 4:
-        return Node("for", args[0], args[1], args[3], next_stat=args[2], semantics="sos")
-    if constructor == "abortsos" and len(args) == 3:
-        return Node("abort", args[0], args[1], args[2], semantics="sos")
-    if constructor == "compabortsos" and len(args) == 4:
-        return Node("comp-abort", args[0], args[1], args[3], (parse_tree(args[2], "sos"),), semantics="sos")
-    if constructor == "assertsos" and len(args) == 4:
-        return Node("assert", args[0], args[1], args[3], next_stat=args[2], semantics="sos")
-    if constructor == "or1sos" and len(args) == 4:
-        return Node("or1", args[0], args[1], args[3], next_stat=args[2], semantics="sos")
-    if constructor == "or2sos" and len(args) == 4:
-        return Node("or2", args[0], args[1], args[3], next_stat=args[2], semantics="sos")
-    if constructor == "par1sos" and len(args) == 5:
-        return Node("par^1", args[0], args[1], args[4], (parse_tree(args[2], "sos"),), next_stat=args[3], semantics="sos")
-    if constructor == "par2sos" and len(args) == 5:
-        return Node("par^2", args[0], args[1], args[4], (parse_tree(args[2], "sos"),), next_stat=args[3], semantics="sos")
-    if constructor == "par3sos" and len(args) == 5:
-        return Node("par^3", args[0], args[1], args[4], (parse_tree(args[2], "sos"),), next_stat=args[3], semantics="sos")
-    if constructor == "par4sos" and len(args) == 5:
-        return Node("par^4", args[0], args[1], args[4], (parse_tree(args[2], "sos"),), next_stat=args[3], semantics="sos")
-    if constructor == "protectsos" and len(args) == 4:
-        return Node("protect", args[0], args[1], args[3], (parse_tree(args[2], "sos"),), semantics="sos")
+        judgement = args[1]
+        statement, before, next_stat, after = "", "", None, ""
 
-    # Bloques y declaraciones (SOS)
-    if constructor == "beginblocksos" and len(args) == 5:
-        return Node("begin-block", args[0], args[1], args[4], (parse_tree(args[2], "sos"),), next_stat=args[3], semantics="sos")
-    if constructor == "varsos":
-        if len(args) == 4:
-            if any(args[2].startswith(c) for c in ("varsos", "nonesos", "seqsos")):
-                return Node("var", args[0], args[1], args[3], (parse_tree(args[2], "sos"),), semantics="sos")
+        if "-->" in judgement or "==>" in judgement:
+            arrow = "-->" if "-->" in judgement else "==>"
+            left, right = judgement.split(arrow, 1)
+            statement, before = parse_config(left.strip())
+
+            right = right.strip()
+            if arrow == "==>" and right.startswith("<") and right.endswith(">"):
+                next_stat, after = parse_config(right)
             else:
-                return Node("var", args[0], args[1], args[3], next_stat=args[2], semantics="sos")
-    if constructor == "nonesos" and len(args) == 3:
-        return Node("none", args[0], args[1], args[2], semantics="sos")
-    if constructor == "endblocksos" and len(args) == 3:
-        return Node("end-block", args[0], args[1], args[2], semantics="sos")
+                next_stat = None
+                after = right
+        
+        # Subárboles (ProofTL) pasados en argumentos posteriores
+        child_args = args[2:]
+        children = tuple(parse_tree(arg, semantics) for arg in child_args if arg and arg not in ("nilProofTL", "nilSOS"))
 
-    raise ValueError(f"Constructor no soportado: {constructor}/{len(args)}")
+        return Node(rule_label, statement, before, after, children=children, next_stat=next_stat, semantics=semantics)
+
+    raise ValueError(f"Constructor de Maude no reconocido: {constructor}/{len(args)}")
 
 
 def identifier_latex(name: str) -> str:
@@ -327,6 +323,14 @@ class Context:
         return statement_latex(clean_text)
 
 
+def format_rule_label(rule: str, sem_tag: str) -> str:
+    rule_clean = rule.replace("_", "-")
+    if "^" in rule_clean:
+        base, sup = rule_clean.split("^", 1)
+        return rf"\;\mathrm{{[{base}^{{{sup}}}_{{{sem_tag}}}]}}"
+    return rf"\;\mathrm{{[{rule_clean}_{{{sem_tag}}}]}}"
+
+
 def get_transition(node: Node, ctx: Context) -> str:
     stmt = ctx.get_statement(node.statement)
     sigma_before = ctx.get_sigma(node.before)
@@ -373,14 +377,14 @@ def get_transition(node: Node, ctx: Context) -> str:
 def format_axiom(node: Node, ctx: Context) -> str:
     judgement = get_transition(node, ctx)
     sem_label = "ns" if node.semantics == "ns" else "sos"
-    return judgement + r"\;\mathrm{[" + node.rule + r"_{" + sem_label + r"}]}"
+    return judgement + format_rule_label(node.rule, sem_label)
 
 
 def format_rule(node: Node, child_derivs: list[str], ctx: Context) -> str:
     judgement = get_transition(node, ctx)
     sem_label = "ns" if node.semantics == "ns" else "sos"
     premises = r"\qquad".join(child_derivs)
-    return r"\frac{" + premises + r"}{" + judgement + r"}\;\mathrm{[" + node.rule + r"_{" + sem_label + r"}]}"
+    return r"\frac{" + premises + r"}{" + judgement + r"}" + format_rule_label(node.rule, sem_label)
 
 
 def split_tree(node: Node, ctx: Context) -> str:
@@ -420,12 +424,11 @@ def split_tree(node: Node, ctx: Context) -> str:
 
 
 def get_tree_bounds(tree: Node) -> tuple[str, str, str, str]:
-    """Obtiene (sigma_ini, sigma_fin, S_ini, S_fin) del árbol principal."""
     if tree.rule == "seq" and tree.children:
         init_sigma, _, init_stmt, _ = get_tree_bounds(tree.children[0])
         _, fin_sigma, _, fin_stmt = get_tree_bounds(tree.children[-1])
         return init_sigma, fin_sigma, init_stmt, fin_stmt
-    
+
     fin_stmt = tree.next_stat if (tree.semantics == "sos" and tree.next_stat) else tree.statement
     return tree.before, tree.after, tree.statement, fin_stmt
 
@@ -433,9 +436,9 @@ def get_tree_bounds(tree: Node) -> tuple[str, str, str, str]:
 def build_semantics_section(tree: Node, title: str) -> str:
     init_raw, fin_raw, init_stmt_raw, fin_stmt_raw = get_tree_bounds(tree)
     ctx = Context(
-        initial_raw=init_raw, 
-        final_raw=fin_raw, 
-        initial_stmt_raw=init_stmt_raw, 
+        initial_raw=init_raw,
+        final_raw=fin_raw,
+        initial_stmt_raw=init_stmt_raw,
         final_stmt_raw=fin_stmt_raw
     )
     main_steps = list(tree.children) if tree.rule == "seq" else [tree]
@@ -547,14 +550,12 @@ def build_semantics_section(tree: Node, title: str) -> str:
 
 
 def extract_search_results(output: str, semantics: str) -> list[Node]:
-    # 1. Buscar resultados provistos por comandos 'search'
-    pattern = r"[X_a-zA-Z0-9]+:(?:Tree|Result|SeqSOS|Config)\s*-->\s*(.*?)(?=\n\s*Solution|\n\s*No more solutions|\n\s*Bye\.|\Z)"
+    pattern = r"[X_a-zA-Z0-9]+:(?:Tree|ProofT|Result|SeqSOS|Config)\s*-->\s*(.*?)(?=\n\s*Solution|\n\s*No more solutions|\n\s*Bye\.|\Z)"
     solutions = re.findall(pattern, output, re.DOTALL)
 
     if solutions:
         return [parse_tree(term.strip(), semantics) for term in solutions]
 
-    # 2. Buscar resultados provistos por 'rewrite' o 'reduce' (result <Type>: ...)
     match_single = re.search(r"result\s+[A-Za-z0-9_-]+:\s*(.*?)(?=\nMaude>|\nBye\.|\Z)", output, re.DOTALL)
     if match_single:
         term = match_single.group(1).strip()
@@ -573,16 +574,11 @@ def run_maude_execution(program_term: str, program_raw: str, main_file: Path, se
 
     if is_nondet:
         print(f"[{semantics.upper()}] Detectado no determinismo (par/or). Buscando todas las ramas con 'search'...")
-        if semantics == "sos":
-            maude_cmd = f"search in {module} : run({program_term}) =>! X:Tree .\nquit\n"
-        else:
-            maude_cmd = f"search in {module} : {program_term} =>! X:Tree .\nquit\n"
+        target_sort = "ProofT" if semantics == "sos" else "Result"
+        maude_cmd = f"search in {module} : {'run(' + program_term + ')' if semantics == 'sos' else program_term} =>! X:{target_sort} .\nquit\n"
     else:
         print(f"[{semantics.upper()}] Programa determinista. Ejecutando mediante 'rewrite' directo...")
-        if semantics == "sos":
-            maude_cmd = f"rewrite in {module} : run({program_term}) .\nquit\n"
-        else:
-            maude_cmd = f"rewrite in {module} : {program_term} .\nquit\n"
+        maude_cmd = f"rewrite in {module} : {'run(' + program_term + ')' if semantics == 'sos' else program_term} .\nquit\n"
 
     process = subprocess.run(
         [maude, "-no-banner", main_file.name],
@@ -619,7 +615,7 @@ def generate_multipage_pdf(trees: list[Node], mode_label: str) -> str:
 \begin{document}
 
 \begin{center}
-  {\bfseries\Large Derivación Semántica Formal -- Notación Nielson con Estados $\sigma_k$}
+  {\bfseries\Large Derivación Semántica Formal -- Notación Nielson}
 \end{center}
 \vspace{-0.3cm}
 
@@ -637,7 +633,7 @@ def generate_comparison_latex(trees_ns: list[Node], trees_sos: list[Node]) -> st
         pages.append(build_semantics_section(tree_ns, title))
 
     for idx, tree_sos in enumerate(trees_sos, start=1):
-        title = f"2. Semántica SOS -- Rama {idx} de {len(trees_sos)}" if len(trees_sos) > 1 else "2. Semántica SOS"
+        title = f"2. Semántica Operacional (SOS) -- Rama {idx} de {len(trees_sos)}" if len(trees_sos) > 1 else "2. Semántica Operacional (SOS)"
         pages.append(build_semantics_section(tree_sos, title))
 
     full_body = "\n\n\\hrulefill\n\n".join(pages)
@@ -694,18 +690,39 @@ def main() -> None:
     args = sys.argv[1:]
 
     mode = "ns"
-    if "--compare" in args or "--both" in args:
-        mode = "compare"
-        if "--compare" in args: args.remove("--compare")
-        if "--both" in args: args.remove("--both")
-    elif "--sos" in args:
-        mode = "sos"
-        args.remove("--sos")
-    elif "--ns" in args:
-        args.remove("--ns")
+    program_input = "program.while"
+    output_input = "derivation.pdf"
 
-    program_file = Path(args[0] if len(args) > 0 else "program.while").resolve()
-    output_pdf = Path(args[1] if len(args) > 1 else "derivation.pdf").resolve()
+    clean_args = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ("--sos", "-sos"):
+            mode = "sos"
+        elif arg in ("--ns", "-ns"):
+            mode = "ns"
+        elif arg in ("--compare", "--both", "-compare"):
+            mode = "compare"
+        elif arg in ("-m", "--mode") and i + 1 < len(args):
+            mode = args[i + 1].lower()
+            i += 1
+        elif arg in ("-o", "--output") and i + 1 < len(args):
+            output_input = args[i + 1]
+            i += 1
+        else:
+            clean_args.append(arg)
+        i += 1
+
+    if clean_args:
+        program_input = clean_args[0]
+        if len(clean_args) > 1 and output_input == "derivation.pdf":
+            output_input = clean_args[1]
+
+    program_file = Path(program_input).resolve()
+    output_pdf = Path(output_input).resolve()
+
+    if not program_file.exists():
+        sys.exit(f"[Error] No se encontró el archivo del programa: {program_file}")
 
     main_file = Path("main.maude").resolve()
     if not main_file.exists():
@@ -733,7 +750,7 @@ def main() -> None:
         latex_code = generate_multipage_pdf(trees, mode.upper())
 
     compile_pdf_in_temp(latex_code, output_pdf)
-    print(f"¡Éxito! PDF compacto generado correctamente: {output_pdf}")
+    print(f"¡Éxito! PDF comparativo generado correctamente: {output_pdf}")
 
 
 if __name__ == "__main__":

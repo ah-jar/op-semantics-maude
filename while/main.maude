@@ -4,6 +4,7 @@ load arithmetic_semantics.maude
 load bool_syntax.maude
 load bool_semantics.maude
 load while_syntax.maude
+load proof_tree.maude
 load ns_while_semantics.maude
 load ns_while_proofs.maude
 load sos_while_semantics.maude

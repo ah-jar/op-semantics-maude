@@ -9,8 +9,8 @@ fmod STATE is
   op empty : -> State [ctor] .
   op [_:=_] : Qid Int -> State [ctor] .
   op null : -> QidSet [ctor] .
-  op _ _ : State State -> State [assoc comm id: empty] .
-  op _ _ : State Qid ~> Int .
+  op __ : State State -> State [assoc comm id: empty] .
+  op __ : State Qid ~> Int .
   op _[_|->_] : State Qid Int -> State .
   op _[_|->_] : State QidSet State -> State .
   op _,_ : QidSet QidSet -> QidSet [assoc comm id: null] .
