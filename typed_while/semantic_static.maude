@@ -9,9 +9,11 @@ fmod SEMANTIC-STATIC is
 
   vars TE : TypeEnv .
   vars T : Type .
+  vars BT : BasicType .
   vars I : Int .
   vars Q : Qid .
   vars E E' : Exp .
+  vars S S' : Stat .
 
   eq TE |- I = int .
   eq TE |- true = bool .
@@ -26,8 +28,40 @@ fmod SEMANTIC-STATIC is
   eq TE |- abort = ok .
   eq TE |- skip = ok .
 
-  eq TE |- (T Q := E) = 
-    if TE [Q |-> T] =/= errorEnv and TE |- E == T 
-    then ok else statError fi .
+  eq TE |- (BT Q := E) = 
+    if TE [Q |-> BT] =/= errorEnv and TE |- E == BT 
+    then ok else ko fi .
+
+  eq TE |- (Q := E) =
+    if TE(Q) =/= error and 
+    TE(Q) == TE |- E then ok else ko fi .
+
+  eq TE |- (S ; S') = 
+    if TE |- S == ok and TE |- S' == ok
+    then ok else ko fi .
+
+  eq TE |- (if E then S else S') = 
+    if TE |- E == bool
+    and TE |- S == ok
+    and TE |- S' == ok 
+    then ok else ko fi .
+
+  eq TE |- (while E do S) = 
+    if TE |- E == bool
+    and TE |- S == ok
+    then ok else ko fi .
+
+  eq TE |- (repeat S until E) = 
+    if TE |- S == ok
+    and TE |- E == bool
+    then ok else ko fi .
+
+  eq TE |- (for (BT Q := E) to E' do S) = 
+    if BT == int 
+    and TE |- E == int
+    and TE [Q |-> BT] =/= errorEnv
+    and TE |- E' == int
+    and TE [Q |-> BT] |- S == ok
+    then ok else ko fi .
 
 endfm

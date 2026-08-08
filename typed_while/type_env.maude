@@ -2,17 +2,17 @@ fmod TYPE-ENV is
   
   pr QID .
 
-  sort Type BasicType TypeEnv StatType .
-  subsort BasicType StatType < Type .
+  sort BasicType Type StatType TypeEnv .
+  subsort BasicType < Type .
 
-  op ok : -> StatType [ctor] .
-  op statError : -> StatType [ctor] .
-
+  ops ok ko : -> StatType [ctor] .
   ops int bool : -> BasicType [ctor] .
-  op error : -> Type [ctor] .
 
   op emptyEnv : -> TypeEnv [ctor] .
   op errorEnv : -> TypeEnv [ctor] .
+
+  op error : -> Type [ctor] . 
+
   op [_|->_] : Qid Type -> TypeEnv [ctor] .
   op __ : TypeEnv TypeEnv -> TypeEnv [ctor assoc comm id: emptyEnv] .
   op _(_) : TypeEnv Qid -> Type .
